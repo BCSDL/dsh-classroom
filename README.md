@@ -6,6 +6,22 @@ A local-first DeepSeek Harness plugin for English/Chinese classes. Import record
 
 ## Install
 
+Version 0.1.6 adds a typed DSH `read_document` tool, native-upload receipt resolution,
+PDF page images, paginated reads and a tool-discipline hook. Every new user input
+executes a local `tool_context` probe before inference and automatically reads the
+first three native attachments (three units each). Remaining units/files require
+explicit reads. Failed/partial reads are marked. The Stop hook requests at most
+two corrections for missing web evidence or missing file readback. Streaming
+drafts are not hidden; this is evidence guidance and bounded runtime correction,
+not a guarantee that a small model cannot hallucinate. Set `toolDiscipline: false`
+in the classroom profile row to disable the hooks while keeping the file reader.
+This hook applies only to DSH; the separate CLI configuration is unchanged.
+
+Use the official native attachment button. The third-party `dsh-file-upload`
+0.5.4 has a conflicting `read_document` tool and was observed failing with
+`cannot get property "fs" without inject` on DSH 0.2.0-rc.2; remove that optional
+bundle before enabling this reader. Removing it does not remove native upload.
+
 Requires Windows, Node 22+, DeepSeek Harness 0.2.0-rc.2, Ollama, uv, FFmpeg/ffprobe on PATH, and an NVIDIA GPU with sufficient available VRAM. Python 3.12 runs in a separate environment. No official launcher or package is patched.
 
 1. Download a fixed GitHub release/tag and inspect the source.

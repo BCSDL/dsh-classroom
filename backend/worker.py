@@ -723,13 +723,18 @@ def dispatch(operation, args):
         destination = ROOT / 'document-previews' / uuid.uuid4().hex
         destination.mkdir(parents=True)
         limit = min(100, max(1, int(args.get('limit', 20))))
+        offset = max(0, int(args.get('offset', 0)))
         pages = []
         iterator = document(args['path'], destination)
-        for unit in iterator:
+        for index, unit in enumerate(iterator):
+            if index < offset:
+                continue
             pages.append(unit)
             if len(pages) > limit:
                 break
-        return {'pages': pages[:limit], 'truncated': len(pages) > limit, 'limit': limit}
+        iterator.close()
+        return {'pages': pages[:limit], 'truncated': len(pages) > limit, 'limit': limit,
+                'offset': offset, 'nextOffset': offset + min(limit, len(pages))}
     identifier = args['id']
     if operation == 'audio':
         return {'path': str(saved_audio(identifier))}

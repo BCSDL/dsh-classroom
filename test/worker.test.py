@@ -40,5 +40,23 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(self.worker.label_word(1.9, 2.8, turns), 'Speaker 2')
         self.assertEqual(self.worker.label_word(8, 9, turns), '未知说话人')
 
+    def test_live_tasks_preempt_file_continuations_and_deduplicate(self):
+        self.assertTrue(self.worker.enqueue('file', 'file-job', 1))
+        self.assertTrue(self.worker.enqueue('live', 'live-job', 0))
+        self.assertFalse(self.worker.enqueue('live', 'live-job', 0))
+        self.assertEqual(self.worker.TASKS.get()[2:], ('live', 'live-job', 0))
+        self.assertEqual(self.worker.TASKS.get()[2:], ('file', 'file-job', 1))
+
+    def test_utf16_source_code_is_text(self):
+        source = Path(self.temporary.name) / 'code.ps1'
+        source.write_text('Write-Output "课堂"', encoding='utf-16')
+        result = self.worker.dispatch('document', {'path': str(source)})
+        self.assertIn('课堂', result['pages'][0]['text'])
+
+    def test_active_recording_cannot_be_enhanced(self):
+        job = self.worker.dispatch('create_live', {})
+        with self.assertRaisesRegex(ValueError, '结束录音'):
+            self.worker.dispatch('enhance', {'id': job['id']})
+
 if __name__ == '__main__':
     unittest.main()

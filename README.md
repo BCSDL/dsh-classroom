@@ -37,7 +37,7 @@ Override paths in the profile patch:
 - Restarted jobs pause with their checkpoints intact. Click **继续处理** to resume. Cancel stops processing and preserves data.
 - Markdown reports and SRT subtitles remain in each job directory. Word-level anonymous speaker labels and speaker-turn timestamps remain in JSON results. Labels can change across revisions and are not real-world identity recognition.
 - ASR loads only on GPU. It waits for available VRAM rather than falling back to CPU or unloading another application's model. The streaming model stays resident while there is headroom and Gemma is already loaded; it is released before image analysis, a new LLM load, completion, or 60 seconds without queued work. File-quality weights are released after each block. Available-memory checks are a guard, not a universal VRAM guarantee against other concurrent applications.
-- Inference is serialized. A file job currently occupies the worker until its analysis finishes; record first and run the enhanced edition afterwards. Simultaneous file analysis and live recording can build a transcription backlog.
+- Inference is serialized with microphone chunks prioritized. File jobs yield after each 60-second audio block; source analysis yields after each page/frame or summary step. A currently running inference still has to finish, so simultaneous work can increase live latency.
 
 ## Formats and evidence
 
@@ -46,6 +46,8 @@ Audio/video support follows the installed FFmpeg build, including ordinary M4A/A
 PDF uses page text and rendered page images, including scanned PDFs via the vision model. PPTX uses text, notes and embedded images; export to PDF for complete slide layout. DOCX uses paragraphs/tables. XLSX/XLSM uses sheet cells and formulas without executing macros. Text/code/configuration files use bounded text blocks. Opaque binary and proprietary engineering formats require their own converter and are explicitly rejected.
 
 Videos are analyzed through sampled visual frames **and** transcribed audio. Default frame interval is 30 seconds and can be changed. Every sampled timestamp is recorded. This is not continuous or every-frame comprehension; brief events between samples may be missed. Long materials use hierarchical summaries; report references support checking the original source.
+
+Additional videos supplied for enhancement have their own audio transcription and timestamp references. They are not assumed to share the recording's timeline. Engineering exchange files (DXF, STEP/IGES, STL/OBJ/PLY/OFF/glTF) can be read with `scripts/setup.ps1 -Engineering`: established CPU parsers return geometry metadata and visual previews. Mesh previews are sampled. DWG, SolidWorks/CATIA and proprietary PCB formats require vendor conversion; feature histories, constraints and all proprietary formats are not supported.
 
 ## Architecture / security
 

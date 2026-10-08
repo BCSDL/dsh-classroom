@@ -1,0 +1,21 @@
+{
+  "name": "dsh-classroom",
+  "version": "0.1.0",
+  "description": "Local classroom recordings: streaming transcripts, speaker labels, translation, summaries, slides and video-frame analysis.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {".": "./lib/index.js", "./cordis.patch.yml": "./cordis.patch.yml"},
+  "files": ["lib", "backend/*.py", "backend/requirements.txt", "web", "scripts", "cordis.patch.yml", "README.md", "LICENSE"],
+  "keywords": ["dsh-plugin", "deepseek-harness", "transcription", "diarization", "local-ai"],
+  "license": "MIT",
+  "engines": {"node": ">=22"},
+  "dsh": {"bundle": {"patch": "./cordis.patch.yml"}},
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/schemastery": "^3.18.4",
+    "@deepseek-ai/dsh-tools": "^0.2.0-rc.1",
+    "@deepseek-ai/dsh-client-connection": "^0.2.0-rc.1",
+    "@deepseek-ai/dsh-host-webserver": "^0.2.0-rc.1"
+  },
+  "scripts": {"test": "node --test test/*.test.mjs", "pack:check": "npm pack --dry-run --ignore-scripts"}
+}

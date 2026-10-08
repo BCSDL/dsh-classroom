@@ -15,8 +15,10 @@
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/schemastery": "^3.18.4",
     "@deepseek-ai/dsh-tools": "^0.2.0-rc.1",
+    "@deepseek-ai/dsh-llm": "^0.2.0-rc.2",
     "@deepseek-ai/dsh-client-connection": "^0.2.0-rc.1",
     "@deepseek-ai/dsh-host-webserver": "^0.2.0-rc.1"
   },
   "scripts": {"test": "node --test test/*.test.mjs", "pack:check": "npm pack --dry-run --ignore-scripts"}
 }
+

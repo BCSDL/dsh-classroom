@@ -64,6 +64,10 @@ Plugin code: MIT. Dependencies and model weights retain their own licenses; weig
 
 ## Development checks
 
+### Optional Codex CLI interoperability adapter
+
+`scripts/mcp-guard.mjs` wraps a tools-only stdio MCP server that silently ignores resource discovery. It returns empty resource lists, forwards tool requests unchanged, and fails timed-out requests explicitly. Example: `node scripts/mcp-guard.mjs node path/to/dsh-memory-mcp.mjs`. This does not change the upstream memory plugin or its storage. Use it only for tools-only servers; resource-capable servers should connect directly.
+
 ```powershell
 node --test test/worker-client.test.mjs
 python test/worker.test.py

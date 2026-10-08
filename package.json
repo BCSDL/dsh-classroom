@@ -1,6 +1,6 @@
 {
   "name": "dsh-classroom",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Local classroom recordings: streaming transcripts, speaker labels, translation, summaries, slides and video-frame analysis.",
   "type": "module",
   "main": "lib/index.js",

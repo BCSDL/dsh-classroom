@@ -43,10 +43,11 @@ test('write results invalidate evidence until the same file is reread; failures 
  const h=harness();applyToolDiscipline(h.ctx,{maxEvidenceRetries:2});const messages=[user([{type:'text',text:'修改代码'}])];
  await h.handlers['agent/pre-step']({agent:h.agent,messages,turn:1,signal:signal()},async()=>({kind:'enter',messages}));
  const emit=(name,isError=false)=>h.handlers['tools/result']({agent:h.agent,name,arguments:{file_path:'main.py'}},{isError,content:[{type:'text',text:'result'}]});
- emit('write_file');emit('read_file',true);await h.handlers['agent/turn-stopping']({agent:h.agent,turn:1,signal:signal()});assert.equal(h.steering.length,1);
- emit('read_file');await h.handlers['agent/turn-stopping']({agent:h.agent,turn:1,signal:signal()});assert.equal(h.steering.length,1);
+ emit('write');emit('read',true);await h.handlers['agent/turn-stopping']({agent:h.agent,turn:1,signal:signal()});assert.equal(h.steering.length,1);
+ emit('read');await h.handlers['agent/turn-stopping']({agent:h.agent,turn:1,signal:signal()});assert.equal(h.steering.length,1);
 });
 test('missing source checks do not confuse an environment probe with web evidence',()=>{
  assert.match(missingEvidence({needsWeb:true,web:false,failures:0,successes:0,dirty:new Set()}),/联网/);
  assert.equal(missingEvidence({needsWeb:true,web:true,failures:0,successes:1,dirty:new Set()}),'');
+ assert.match(missingEvidence({needsTaskEvidence:true,successes:0,failures:0,dirty:new Set()}),/任务工具/);
 });

@@ -6,7 +6,7 @@ A local-first DeepSeek Harness plugin for English/Chinese classes. Import record
 
 ## Install
 
-Version 0.1.6 adds a typed DSH `read_document` tool, native-upload receipt resolution,
+Version 0.1.7 adds a typed DSH `read_document` tool, native-upload receipt resolution,
 PDF page images, paginated reads and a tool-discipline hook. Every new user input
 executes a local `tool_context` probe before inference and automatically reads the
 first three native attachments (three units each). Remaining units/files require

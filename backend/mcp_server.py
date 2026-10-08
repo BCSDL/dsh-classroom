@@ -28,7 +28,7 @@ def main():
             params = request.get('params', {})
             if method == 'initialize':
                 result = {'protocolVersion': params.get('protocolVersion', '2024-11-05'),
-                          'capabilities': {'tools': {}}, 'serverInfo': {'name': 'dsh-classroom', 'version': '0.1.1'}}
+                          'capabilities': {'tools': {}}, 'serverInfo': {'name': 'dsh-classroom', 'version': '0.1.2'}}
             elif method == 'ping':
                 result = {}
             elif method == 'tools/list':

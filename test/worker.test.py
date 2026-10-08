@@ -3,6 +3,7 @@ import json
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 class WorkerTests(unittest.TestCase):
@@ -57,6 +58,22 @@ class WorkerTests(unittest.TestCase):
         job = self.worker.dispatch('create_live', {})
         with self.assertRaisesRegex(ValueError, '结束录音'):
             self.worker.dispatch('enhance', {'id': job['id']})
+
+    def test_windows_sharing_violation_retries_without_deleting_checkpoint(self):
+        destination = Path(self.temporary.name) / 'state.json'
+        destination.write_text('{"old": true}', encoding='utf-8')
+        original = Path.replace
+        attempts = []
+        def replace(path, target):
+            attempts.append(path)
+            if len(attempts) == 1:
+                self.assertTrue(json.loads(destination.read_text())['old'])
+                raise PermissionError('Temporary Windows sharing violation')
+            return original(path, target)
+        with patch.object(Path, 'replace', replace):
+            self.worker.atomic_json(destination, {'new': True})
+        self.assertEqual(len(attempts), 2)
+        self.assertEqual(json.loads(destination.read_text()), {'new': True})
 
 if __name__ == '__main__':
     unittest.main()

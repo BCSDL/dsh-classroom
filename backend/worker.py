@@ -46,9 +46,21 @@ def enqueue(operation, job_id, argument=None):
 
 
 def atomic_json(path, value):
-    temporary = path.with_suffix('.tmp')
-    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding='utf-8')
-    temporary.replace(path)
+    temporary = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
+    with temporary.open('w', encoding='utf-8') as handle:
+        json.dump(value, handle, ensure_ascii=False, indent=2)
+        handle.flush()
+        os.fsync(handle.fileno())
+    # Windows readers/antivirus can briefly deny replacement. Keep the prior
+    # checkpoint intact and retry a bounded interval; never unlink it first.
+    for attempt in range(12):
+        try:
+            temporary.replace(path)
+            return
+        except PermissionError:
+            if attempt == 11:
+                raise
+            time.sleep(min(0.02 * 2 ** attempt, 0.5))
 
 
 def job_dir(job_id):
@@ -703,7 +715,8 @@ def dispatch(operation, args):
                     MODELS / 'wespeaker_en_voxceleb_resnet34_LM.onnx',
                     MODELS / '3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx'])}
     if operation == 'list':
-        return [public_job(json.loads(p.read_text(encoding='utf-8'))) for p in sorted((ROOT / 'jobs').glob('*/job.json'), key=lambda p: p.stat().st_mtime, reverse=True)]
+        with LOCK:
+            return [public_job(json.loads(p.read_text(encoding='utf-8'))) for p in sorted((ROOT / 'jobs').glob('*/job.json'), key=lambda p: p.stat().st_mtime, reverse=True)]
     if operation in {'start_file', 'create_live'}:
         return public_job(new_job('file' if operation == 'start_file' else 'live', args))
     if operation == 'document':

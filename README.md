@@ -36,7 +36,8 @@ Override paths in the profile patch:
 - **File/enhanced:** large-v3 by default, in bounded 60-second blocks. Raw audio and the real-time edition remain separate. A new enhanced job links to its parent.
 - Restarted jobs pause with their checkpoints intact. Click **继续处理** to resume. Cancel stops processing and preserves data.
 - Markdown reports and SRT subtitles remain in each job directory. Word-level anonymous speaker labels and speaker-turn timestamps remain in JSON results. Labels can change across revisions and are not real-world identity recognition.
-- ASR loads only on GPU. It waits for available VRAM rather than falling back to CPU or unloading another application's model. ASR weights are unloaded before Ollama analysis. Available-memory checks are a guard, not a universal VRAM guarantee against other concurrent applications.
+- ASR loads only on GPU. It waits for available VRAM rather than falling back to CPU or unloading another application's model. The streaming model stays resident while there is headroom and Gemma is already loaded; it is released before image analysis, a new LLM load, completion, or 60 seconds without queued work. File-quality weights are released after each block. Available-memory checks are a guard, not a universal VRAM guarantee against other concurrent applications.
+- Inference is serialized. A file job currently occupies the worker until its analysis finishes; record first and run the enhanced edition afterwards. Simultaneous file analysis and live recording can build a transcription backlog.
 
 ## Formats and evidence
 

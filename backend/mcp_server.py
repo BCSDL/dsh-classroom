@@ -44,14 +44,20 @@ def main():
                     if args.get('images', True):
                         for page in value['pages'][:3]:
                             if page.get('image'):
-                                data = Path(page['image']).read_bytes()
-                                mime = 'image/png' if data.startswith(b'\x89PNG') else 'image/jpeg'
-                                content.append({'type': 'image', 'mimeType': mime, 'data': base64.b64encode(data).decode()})
+                                import io
+                                from PIL import Image
+                                with Image.open(page['image']) as image:
+                                    output = io.BytesIO()
+                                    image.convert('RGB').save(output, format='JPEG', quality=85)
+                                content.append({'type': 'image', 'mimeType': 'image/jpeg',
+                                                'data': base64.b64encode(output.getvalue()).decode()})
                 else:
                     raise ValueError('Unknown tool')
                 result = {'content': content, 'isError': False}
             else:
-                raise ValueError('Unsupported method')
+                print(json.dumps({'jsonrpc': '2.0', 'id': identifier,
+                                  'error': {'code': -32601, 'message': 'Unsupported method'}}), flush=True)
+                continue
             response = {'jsonrpc': '2.0', 'id': identifier, 'result': result}
         except Exception as error:
             response = {'jsonrpc': '2.0', 'id': identifier, 'result': {'content': [{'type': 'text', 'text': str(error)}], 'isError': True}}

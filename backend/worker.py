@@ -26,6 +26,8 @@ MODEL = CONFIG.get('model', 'gemma4:12b-it-qat')
 LOCK = threading.RLock()
 TASKS: queue.Queue = queue.Queue()
 DLL_HANDLES = []
+DLL_DIRECTORIES = set()
+ASR_MODELS = {}
 ROOT.mkdir(parents=True, exist_ok=True)
 
 
@@ -97,6 +99,15 @@ def normalize(path, dest, job_id, start=None, length=None):
 
 
 def ollama(prompt, images=None):
+    # Retain the small streaming ASR model only while Gemma is already resident
+    # and there is headroom. Release it before visual work or a new LLM load.
+    try:
+        with urllib.request.urlopen(OLLAMA + '/api/ps', timeout=5) as response:
+            resident = any(m.get('name', '').split(':')[0] == MODEL.split(':')[0] for m in json.load(response).get('models', []))
+    except Exception:
+        resident = False
+    if images or not resident or gpu_free() < 1800:
+        release_asr_models()
     message = {'role': 'user', 'content': prompt}
     if images:
         message['images'] = [base64.b64encode(Path(p).read_bytes()).decode() for p in images]
@@ -122,8 +133,18 @@ def cuda_paths():
     import site
     for directory in site.getsitepackages():
         for candidate in (Path(directory) / 'nvidia').glob('*/bin'):
+            if str(candidate) in DLL_DIRECTORIES:
+                continue
             os.environ['PATH'] = str(candidate) + os.pathsep + os.environ.get('PATH', '')
             DLL_HANDLES.append(os.add_dll_directory(str(candidate)))
+            DLL_DIRECTORIES.add(str(candidate))
+
+
+def release_asr_models():
+    for model in ASR_MODELS.values():
+        model.model.unload_model(to_cpu=False)
+    ASR_MODELS.clear()
+    gc.collect()
 
 
 @lru_cache(maxsize=2)
@@ -138,7 +159,7 @@ def speaker_components(language='en'):
         segmentation=sherpa.OfflineSpeakerSegmentationModelConfig(
             pyannote=sherpa.OfflineSpeakerSegmentationPyannoteModelConfig(model=str(segmentation)), num_threads=4),
         embedding=sherpa.SpeakerEmbeddingExtractorConfig(model=str(embedding), num_threads=4),
-        clustering=sherpa.FastClusteringConfig(num_clusters=-1, threshold=0.50),
+        clustering=sherpa.FastClusteringConfig(num_clusters=-1, threshold=0.90 if language == 'zh' else 0.50),
         min_duration_on=0.25, min_duration_off=0.35)
     if not config.validate():
         raise RuntimeError('说话人模型未准备好，请运行安装脚本下载模型')
@@ -193,18 +214,25 @@ def transcribe(wav_path, job_id, offset, quality):
     import soundfile as sf
     from faster_whisper import WhisperModel
     cancelled(job_id)
+    started_at = time.monotonic()
     audio, sample_rate = sf.read(wav_path, dtype='float32')
     if sample_rate != 16000 or audio.ndim != 1:
         raise ValueError('Internal audio must be mono 16 kHz')
     minimum = 4000 if quality == 'large-v3' else 2200
-    while gpu_free() < minimum:
+    if quality not in ASR_MODELS:
+        release_asr_models()
+    while quality not in ASR_MODELS and gpu_free() < minimum:
         update(job_id, phase=f'等待显存：需要至少 {minimum} MiB 空闲；不会卸载其他应用的模型')
         time.sleep(2)
         cancelled(job_id)
     cuda_paths()
     update(job_id, phase='GPU 转写：' + quality)
-    model = WhisperModel(str(MODELS / quality), device='cuda', compute_type='int8_float16',
-                         cpu_threads=4, num_workers=1)
+    model = ASR_MODELS.get(quality)
+    if model is None:
+        model = WhisperModel(str(MODELS / quality), device='cuda', compute_type='int8_float16',
+                             cpu_threads=4, num_workers=1)
+        if quality == 'turbo':
+            ASR_MODELS[quality] = model
     try:
         language = read_job(job_id)['options'].get('language', 'en')
         iterator, info = model.transcribe(audio, language=None if language == 'auto' else language,
@@ -218,16 +246,19 @@ def transcribe(wav_path, job_id, offset, quality):
                              'words': [{'start': offset + w.start, 'end': offset + w.end, 'text': w.word}
                                        for w in (segment.words or [])]})
     finally:
-        model.model.unload_model(to_cpu=False)
+        if quality != 'turbo':
+            model.model.unload_model(to_cpu=False)
         del model
         gc.collect()
     update(job_id, phase='区分说话人（CPU）')
+    asr_elapsed = time.monotonic() - started_at
     turns = diarize(audio, job_id, offset, info.language) if len(audio) > 16000 else []
     for segment in segments:
         segment['speaker'] = label_word(segment['start'], segment['end'], turns)
         for word in segment['words']:
             word['speaker'] = label_word(word['start'], word['end'], turns)
     return {'segments': segments, 'speakerTurns': turns, 'language': info.language,
+            'asrElapsedSeconds': asr_elapsed, 'diarizationElapsedSeconds': time.monotonic() - started_at - asr_elapsed,
             'speakerLabels': 'provisional; anonymous; overlapping speech may be ambiguous'}
 
 
@@ -464,8 +495,13 @@ def process_live(job_id, index):
 
 def runner():
     while True:
-        operation, job_id, argument = TASKS.get()
         try:
+            operation, job_id, argument = TASKS.get(timeout=60)
+        except queue.Empty:
+            release_asr_models()
+            continue
+        try:
+            cancelled(job_id)
             if operation == 'file':
                 process_file(job_id)
             else:
@@ -476,6 +512,8 @@ def runner():
             update(job_id, state='error', error=str(error), phase='处理失败，可在修复原因后继续')
         finally:
             TASKS.task_done()
+            if TASKS.empty() and read_job(job_id)['state'] in {'complete', 'error', 'cancelled'}:
+                release_asr_models()
 
 
 def new_job(kind, args):
@@ -511,7 +549,10 @@ def dispatch(operation, args):
         return {'dataDirectory': str(ROOT), 'modelsDirectory': str(MODELS),
                 'model': MODEL, 'gpuFreeMiB': gpu_free(), 'queueLength': TASKS.qsize(),
                 'modelsReady': all((MODELS / name / 'model.bin').is_file() for name in ['turbo', 'large-v3']),
-                'speakerReady': (MODELS / 'wespeaker_en_voxceleb_resnet34_LM.onnx').is_file()}
+                'speakerReady': all(path.is_file() for path in [
+                    MODELS / 'sherpa-onnx-pyannote-segmentation-3-0' / 'model.onnx',
+                    MODELS / 'wespeaker_en_voxceleb_resnet34_LM.onnx',
+                    MODELS / '3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx'])}
     if operation == 'list':
         return [public_job(json.loads(p.read_text(encoding='utf-8'))) for p in sorted((ROOT / 'jobs').glob('*/job.json'), key=lambda p: p.stat().st_mtime, reverse=True)]
     if operation in {'start_file', 'create_live'}:

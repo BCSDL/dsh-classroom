@@ -5,7 +5,7 @@ import {applyToolDiscipline,registerDocumentTools,currentFiles,missingEvidence} 
 function harness(){
  const handlers={},definitions=new Map(),calls=[],steering=[];
  const agent={session:{header:{cwd:process.cwd()},snapshotEvents:()=>[]},steer:m=>steering.push(m)};
- const ctx={effect(fn){return fn();},on(name,fn){handlers[name]=fn;},systemPrompt:{section(){}},get(){return {fileHostPath:()=>'/fixture.pdf',async *readFileStream(){yield new Uint8Array([1]);}}},tools:{register(d){definitions.set(d.name,d);return ()=>{};},schemas(){return []},async execute(exec){calls.push(exec);let result;
+ const ctx={effect(fn){return fn();},on(name,fn){handlers[name]=fn;},systemPrompt:{section(){}},get(){return {fileHostPath:()=>'/fixture.pdf',async *readFileStream(){yield new Uint8Array([1]);}}},tools:{register(d){definitions.set(d.name,d);return ()=>{};},schemas(){return [...definitions.values()].map(({name,description,parameters})=>({name,description,parameters}));},async execute(exec){calls.push(exec);let result;
   try{const d=definitions.get(exec.name);if(!d)throw Error('Unknown tool');const value=await d.execute(exec.arguments,exec);result={isError:false,content:d.output.render(exec.arguments,value)};}catch(error){result={isError:true,content:[{type:'text',text:error.message}]};}
   handlers['tools/result']?.(exec,result);return result;
  }}};
@@ -50,4 +50,11 @@ test('missing source checks do not confuse an environment probe with web evidenc
  assert.match(missingEvidence({needsWeb:true,web:false,failures:0,successes:0,dirty:new Set()}),/联网/);
  assert.equal(missingEvidence({needsWeb:true,web:true,failures:0,successes:1,dirty:new Set()}),'');
  assert.match(missingEvidence({needsTaskEvidence:true,successes:0,failures:0,dirty:new Set()}),/任务工具/);
+});
+test('failed calls receive current tool schema without changing their error outcome',async()=>{
+ const h=harness();applyToolDiscipline(h.ctx,{maxEvidenceRetries:2});
+ const result=await h.handlers['tools/post-execute']({agent:h.agent,name:'tool_context',signal:signal()},{isError:true},async()=>({kind:'accept'}));
+ assert.equal(result.kind,'accept');assert.ok(JSON.stringify(result.additionalContexts).includes('tool_context'));
+ const help=h.calls.length;const schema=await h.ctx.tools.execute({agent:h.agent,name:'tool_help',arguments:{name:'tool_context'},signal:signal()});
+ assert.equal(schema.isError,false);assert.ok(schema.content[0].text.includes('parameters'));assert.equal(h.calls.length,help+1);
 });

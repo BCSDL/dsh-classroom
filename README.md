@@ -6,7 +6,7 @@ A local-first DeepSeek Harness plugin for English/Chinese classes. Import record
 
 ## Install
 
-Version 0.1.7 adds a typed DSH `read_document` tool, native-upload receipt resolution,
+Version 0.1.8 adds a typed DSH `read_document` tool, native-upload receipt resolution,
 PDF page images, paginated reads and a tool-discipline hook. Every new user input
 executes a local `tool_context` probe before inference and automatically reads the
 first three native attachments (three units each). Remaining units/files require
@@ -16,6 +16,8 @@ drafts are not hidden; this is evidence guidance and bounded runtime correction,
 not a guarantee that a small model cannot hallucinate. Set `toolDiscipline: false`
 in the classroom profile row to disable the hooks while keeping the file reader.
 This hook applies only to DSH; the separate CLI configuration is unchanged.
+`tool_help` returns a live tool schema; failed calls receive the real schema or
+an unknown-name correction. Schema lookup is not counted as task/source evidence.
 
 Use the official native attachment button. The third-party `dsh-file-upload`
 0.5.4 has a conflicting `read_document` tool and was observed failing with

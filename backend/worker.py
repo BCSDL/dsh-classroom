@@ -16,6 +16,18 @@ import uuid
 import wave
 from functools import lru_cache
 from pathlib import Path
+from types import SimpleNamespace
+sys.path.insert(0, str(Path(__file__).parent))
+
+_WATCH = None
+
+
+def watch_service():
+    global _WATCH
+    if _WATCH is None:
+        from watch_capture import WatchCapture
+        _WATCH = WatchCapture(SimpleNamespace(**globals()))
+    return _WATCH
 
 CONFIG = json.loads(os.environ.get('DSH_CLASSROOM_CONFIG', '{}'))
 ROOT = Path(CONFIG.get('dataDirectory', str(Path.home() / '.dsh-classroom'))).resolve()
@@ -41,7 +53,7 @@ def enqueue(operation, job_id, argument=None):
         if key in PENDING_TASKS:
             return False
         PENDING_TASKS.add(key)
-        TASKS.put((0 if operation == 'live' else 10, next(TASK_SEQUENCE), *key))
+        TASKS.put((0 if operation == 'live' else 5 if operation == 'watch_frame' else 10, next(TASK_SEQUENCE), *key))
     return True
 
 
@@ -325,6 +337,8 @@ def chunk_result(job_id, chunk_index, source, offset, quality):
         item = transcribe(normalized, job_id, offset, quality)
         item.update(index=chunk_index, offset=offset, audio=str(normalized), quality=quality)
         atomic_json(checkpoint, item)
+    if read_job(job_id)['kind'] == 'watch':
+        item = watch_service().decorate(job_id, item)
     item = enrich_chunk(job_id, item)
     atomic_json(result_path, item)
     update(job_id, completedChunks=len(list((directory / 'results').glob('[0-9]' * 8 + '.json'))), phase='已保存结果')
@@ -538,6 +552,8 @@ def export_job(job_id):
               result_text(job_id) + '\n\n## 双语摘要\n\n' + job.get('summary', '') +
               '\n\n## 分段翻译与分析\n\n' + '\n\n'.join(translations) +
               '\n\n## 课件和视频融合分析\n\n' + job.get('deepSummary', ''))
+    if job['kind'] == 'watch':
+        report += watch_service().report(job_id)
     (directory / 'report.md').write_text(report, encoding='utf-8')
     subtitles = []
     def timestamp(seconds):
@@ -586,7 +602,7 @@ def process_live(job_id, index):
     chunk_result(job_id, index, chunk['path'], chunk['offset'], 'turbo')
     export_job(job_id)
     job = read_job(job_id)
-    state = 'complete' if job.get('recordingFinished') and job.get('completedChunks', 0) == len(job['chunks']) else 'recording'
+    state = watch_service().state(job_id) if job['kind'] == 'watch' else 'complete' if job.get('recordingFinished') and job.get('completedChunks', 0) == len(job['chunks']) else 'recording'
     update(job_id, state=state, phase='录音结束' if state == 'complete' else '等待下一段录音')
 
 
@@ -604,6 +620,8 @@ def runner():
                 process_file(job_id, argument or 0)
             elif operation == 'live':
                 process_live(job_id, argument)
+            elif operation == 'watch_frame':
+                watch_service().process_frame(job_id, argument)
             else:
                 generator = DEEP_TASKS.setdefault(job_id, deep_analysis(job_id))
                 try:
@@ -659,7 +677,7 @@ def public_job(job):
 
 def saved_audio(identifier):
     parent = read_job(identifier)
-    if parent['kind'] != 'live':
+    if parent['kind'] not in {'live', 'watch'}:
         return Path(parent['source'])
     if parent['state'] not in {'complete', 'cancelled', 'paused', 'error'}:
         raise ValueError('请先结束录音，再回放或增强完整录音')
@@ -706,6 +724,8 @@ def saved_audio(identifier):
 
 
 def dispatch(operation, args):
+    if operation in {'create_watch', 'watch_event', 'watch_frame', 'watch_status', 'watch_frame_path'}:
+        return watch_service().dispatch(operation, args)
     if operation == 'status':
         return {'dataDirectory': str(ROOT), 'modelsDirectory': str(MODELS),
                 'model': MODEL, 'gpuFreeMiB': gpu_free(), 'queueLength': TASKS.qsize(),
@@ -769,7 +789,10 @@ def dispatch(operation, args):
         return {'accepted': True, 'duplicate': False}
     if operation == 'finish':
         job = update(identifier, recordingFinished=True)
-        if job['completedChunks'] == len(job['chunks']):
+        if job['kind'] == 'watch':
+            update(identifier, state=watch_service().state(identifier), phase='采集结束，等待已保存画面和音频处理')
+            export_job(identifier)
+        elif job['completedChunks'] == len(job['chunks']):
             update(identifier, state='complete', phase='录音结束')
         return public_job(read_job(identifier))
     if operation == 'cancel':
@@ -785,15 +808,19 @@ def dispatch(operation, args):
             for index in sorted(map(int, job['chunks'])):
                 if not (job_dir(identifier) / 'results' / f'{index:08d}.json').exists():
                     enqueue('live', identifier, index)
+            if job['kind'] == 'watch':
+                watch_service().resume(identifier)
+                update(identifier, state=watch_service().state(identifier))
         return public_job(job)
     if operation == 'enhance':
         parent = read_job(identifier)
         if parent['state'] not in {'complete', 'cancelled', 'paused', 'error'}:
             raise ValueError('请先结束录音并等待转写完成，再生成增强版')
         source = saved_audio(identifier)
+        watch_materials = watch_service().enhance_materials(identifier) if parent['kind'] == 'watch' else []
         child = new_job('file', {'path': str(source), 'title': parent['title'] + ' · 增强版',
                                  'options': {**parent['options'], 'quality': 'large-v3', **args.get('options', {})},
-                                 'materials': args.get('materials', [])})
+                                 'materials': watch_materials + args.get('materials', [])})
         update(child['id'], parentId=identifier)
         return public_job(read_job(child['id']))
     raise ValueError('Unsupported operation: ' + operation)

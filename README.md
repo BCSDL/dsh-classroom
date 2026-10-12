@@ -6,6 +6,45 @@ A local-first DeepSeek Harness plugin for English/Chinese classes. Import record
 
 ## Install
 
+### Chrome streaming playback (0.2.0)
+
+Open `/classroom/watch` from the existing authenticated DSH origin. Click the
+capture button, choose the Chrome tab playing the lecture, and enable tab audio.
+The browser picker is a human action. This does not retrieve media manifests,
+download URLs, cookies or DRM material. Capture runs while this page stays open.
+
+Audio is saved in recoverable 15-second PCM chunks and uses the existing local
+Whisper/Gemma queue. Changed screen frames are sampled at a minimum 12-second
+interval by default; static content is deduplicated, with a periodic 60-second
+evidence frame. Drag on the preview to crop to the slide area. The real saved
+images, visual interpretations, player captions, queue counts and report are
+visible. Translation/summary work shares one inference queue; delays are reported.
+This is sampled interpretation, not exhaustive frame-by-frame video understanding.
+
+Optional `chrome-companion/` is a tiny Manifest V3 extension with `activeTab`,
+`scripting`, session storage and loopback-only host permissions. Load that folder
+with Chrome's **Load unpacked**, then copy a pairing code from the capture page,
+open the video tab, click the extension and connect. The content script reads
+visible caption cues and video time only in the tab you connect. No broad site
+permission is requested. Pairing can write only clock/caption metadata to one
+local job, expires after 16 hours, is rotated on regeneration and revoked on stop.
+Reconnection is required after navigation/browser or DSH restart. Some players
+do not expose native caption cues; their visible captions are still available in
+sampled images, and full speech uses audio ASR. No promise is made that every
+Panopto theme's DOM caption layout is supported without testing.
+
+Capture seconds and lecture/player seconds are stored separately. Pause, seek and
+speed changes from the companion create fresh anchors. Stale/missing anchors
+produce an unknown course time rather than a fabricated one. Manual calibration
+is available, but is intentionally short-lived. Finish first, wait for the audio
+and frames, then add slides/videos for an enhanced edition with the saved audio,
+screen evidence and timing report; the original job stays intact. Screen-only
+sessions can produce a report; audio-based enhanced transcription requires audio.
+
+The DSH model can read an existing capture through the typed `watch_playback`
+tool. A successful start is not a completed analysis. Long sessions and the
+actual school's Panopto instance need practical validation.
+
 Version 0.1.8 adds a typed DSH `read_document` tool, native-upload receipt resolution,
 PDF page images, paginated reads and a tool-discipline hook. Every new user input
 executes a local `tool_context` probe before inference and automatically reads the

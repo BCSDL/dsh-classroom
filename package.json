@@ -1,11 +1,11 @@
 {
   "name": "dsh-classroom",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "description": "Local classroom recordings: streaming transcripts, speaker labels, translation, summaries, slides and video-frame analysis.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {".": "./lib/index.js", "./cordis.patch.yml": "./cordis.patch.yml"},
-  "files": ["lib", "backend/*.py", "backend/*requirements.txt", "web", "scripts", "skills", "cordis.patch.yml", "README.md", "LICENSE"],
+  "files": ["lib", "backend/*.py", "backend/*requirements.txt", "web", "chrome-companion", "scripts", "skills", "cordis.patch.yml", "README.md", "LICENSE"],
   "keywords": ["dsh-plugin", "deepseek-harness", "transcription", "diarization", "local-ai"],
   "dependencies": {"marked":"18.1.0","dompurify":"3.4.16"},
   "license": "MIT",
@@ -21,4 +21,3 @@
   },
   "scripts": {"test": "node --test test/*.test.mjs", "pack:check": "npm pack --dry-run --ignore-scripts"}
 }
-

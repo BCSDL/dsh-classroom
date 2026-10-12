@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import json
 import os
 import tempfile
@@ -93,6 +94,63 @@ class WorkerTests(unittest.TestCase):
             self.worker.atomic_json(destination, {'new': True})
         self.assertEqual(len(attempts), 2)
         self.assertEqual(json.loads(destination.read_text()), {'new': True})
+
+    def test_cleanup_releases_only_our_configured_model_lease(self):
+        self.worker.OLLAMA_LEASE = 'our-lease'
+        models = [{'name': self.worker.MODEL, 'expires_at': 'our-lease'},
+                  {'name': 'unrelated:latest', 'expires_at': 'other-lease'}]
+        with patch.object(self.worker, 'ollama_models', return_value=models), \
+             patch.object(self.worker.urllib.request, 'urlopen', return_value=io.BytesIO(b'{}')) as opened:
+            self.assertTrue(self.worker.release_ollama_model())
+        request = opened.call_args.args[0]
+        self.assertEqual(json.loads(request.data), {'model': self.worker.MODEL, 'keep_alive': 0, 'stream': False})
+        self.assertIsNone(self.worker.OLLAMA_LEASE)
+
+    def test_cleanup_does_not_unload_a_lease_refreshed_by_chat(self):
+        self.worker.OLLAMA_LEASE = 'our-lease'
+        with patch.object(self.worker, 'ollama_models', return_value=[{'name': self.worker.MODEL, 'expires_at': 'chat-lease'}]), \
+             patch.object(self.worker.urllib.request, 'urlopen') as opened:
+            self.assertFalse(self.worker.release_ollama_model())
+            opened.assert_not_called()
+
+    def test_asr_pressure_does_not_unload_other_models(self):
+        with patch.object(self.worker, 'ollama_models', return_value=[{'name': 'unrelated:latest'}]), \
+             patch.object(self.worker.urllib.request, 'urlopen') as opened:
+            self.assertFalse(self.worker.release_ollama_model(for_asr=True))
+            opened.assert_not_called()
+
+    def test_asr_pressure_releases_shared_classroom_model(self):
+        with patch.object(self.worker, 'ollama_models', return_value=[{'name': self.worker.MODEL, 'expires_at': 'chat-lease'}]), \
+             patch.object(self.worker.urllib.request, 'urlopen', return_value=io.BytesIO(b'{}')):
+            self.assertTrue(self.worker.release_ollama_model(for_asr=True))
+
+    def test_asr_shortage_is_bounded_and_recoverable(self):
+        job = self.worker.dispatch('create_live', {})
+        with patch.object(self.worker, 'gpu_free', return_value=100), \
+             patch.object(self.worker, 'release_ollama_model') as release, \
+             patch.object(self.worker.time, 'monotonic', side_effect=[0, 121]):
+            with self.assertRaisesRegex(RuntimeError, '120 秒'):
+                self.worker.ensure_asr_memory(4000, job['id'])
+            release.assert_called_once_with(for_asr=True)
+        self.assertTrue((self.worker.job_dir(job['id']) / 'job.json').exists())
+
+    def test_asr_does_not_unload_gemma_when_memory_suffices(self):
+        with patch.object(self.worker, 'gpu_free', return_value=8000), \
+             patch.object(self.worker, 'release_ollama_model') as release:
+            self.worker.ensure_asr_memory(4000, 'unused')
+            release.assert_not_called()
+
+    def test_idle_cleanup_failure_does_not_crash_runner(self):
+        with patch.object(self.worker, 'release_asr_models') as asr, \
+             patch.object(self.worker, 'release_ollama_model', side_effect=OSError('offline')), \
+             patch.object(self.worker.sys, 'stderr', io.StringIO()):
+            self.worker.release_idle_models()
+            asr.assert_called_once()
+
+    def test_finish_after_last_processed_chunk_enqueues_cleanup(self):
+        job = self.worker.dispatch('create_live', {})
+        self.assertEqual(self.worker.dispatch('finish', {'id': job['id']})['state'], 'complete')
+        self.assertEqual(self.worker.TASKS.get()[2], 'cleanup')
 
 if __name__ == '__main__':
     unittest.main()

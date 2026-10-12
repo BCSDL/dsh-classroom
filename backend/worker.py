@@ -44,6 +44,7 @@ DEEP_TASKS = {}
 DLL_HANDLES = []
 DLL_DIRECTORIES = set()
 ASR_MODELS = {}
+OLLAMA_LEASE = None
 ROOT.mkdir(parents=True, exist_ok=True)
 
 
@@ -137,11 +138,12 @@ def normalize(path, dest, job_id, start=None, length=None):
 
 
 def ollama(prompt, images=None, output_format=None, max_tokens=1400):
+    global OLLAMA_LEASE
     # Retain the small streaming ASR model only while Gemma is already resident
     # and there is headroom. Release it before visual work or a new LLM load.
     try:
         with urllib.request.urlopen(OLLAMA + '/api/ps', timeout=5) as response:
-            resident = any(m.get('name', '').split(':')[0] == MODEL.split(':')[0] for m in json.load(response).get('models', []))
+            resident = any(same_ollama_model(m.get('name', '')) for m in json.load(response).get('models', []))
     except Exception:
         resident = False
     if images or not resident or gpu_free() < 1800:
@@ -156,10 +158,74 @@ def ollama(prompt, images=None, output_format=None, max_tokens=1400):
     request = urllib.request.Request(OLLAMA + '/api/chat', json.dumps(body).encode(), {'Content-Type': 'application/json'})
     with urllib.request.urlopen(request, timeout=240) as response:
         value = json.load(response)
+    # Remember this request's lease. Cleanup must not unload a lease refreshed
+    # by a later DSH chat or another client sharing the same Ollama server.
+    try:
+        OLLAMA_LEASE = next((m.get('expires_at') for m in ollama_models()
+                             if same_ollama_model(m.get('name', ''))), None)
+    except Exception:
+        OLLAMA_LEASE = None
     result = value.get('message', {}).get('content', '').strip()
     if not result:
         raise RuntimeError('本地模型返回空结果')
     return result
+
+
+def same_ollama_model(name):
+    return (name if ':' in name else name + ':latest') == (MODEL if ':' in MODEL else MODEL + ':latest')
+
+
+def ollama_models():
+    with urllib.request.urlopen(OLLAMA + '/api/ps', timeout=5) as response:
+        return json.load(response).get('models', [])
+
+
+def release_ollama_model(for_asr=False):
+    global OLLAMA_LEASE
+    # Under ASR pressure the user-authorized shared classroom model can yield.
+    # Normal cleanup only releases our last lease; unrelated models are ignored.
+    if not for_asr and OLLAMA_LEASE is None:
+        return False
+    resident = next((m for m in ollama_models() if same_ollama_model(m.get('name', ''))), None)
+    if resident is None:
+        OLLAMA_LEASE = None
+        return False
+    if not for_asr and resident.get('expires_at') != OLLAMA_LEASE:
+        OLLAMA_LEASE = None
+        return False
+    request = urllib.request.Request(OLLAMA + '/api/generate',
+                                    json.dumps({'model': MODEL, 'keep_alive': 0, 'stream': False}).encode(),
+                                    {'Content-Type': 'application/json'})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        json.load(response)
+    OLLAMA_LEASE = None
+    return True
+
+
+def release_idle_models():
+    release_asr_models()
+    try:
+        release_ollama_model()
+    except Exception as error:
+        # A stopped/unreachable Ollama must not terminate the job runner.
+        print('Classroom GPU cleanup: ' + str(error), file=sys.stderr, flush=True)
+
+
+def ensure_asr_memory(minimum, job_id):
+    deadline = time.monotonic() + 120
+    tried_release = False
+    while gpu_free() < minimum:
+        cancelled(job_id)
+        if not tried_release:
+            update(job_id, phase='转写需要显存，释放课堂使用的 Gemma；其他模型保持不变')
+            release_ollama_model(for_asr=True)
+            tried_release = True
+            continue
+        if time.monotonic() >= deadline:
+            raise RuntimeError(f'等待显存超过 120 秒，需要至少 {minimum} MiB 空闲。'
+                               '请关闭占用显存的其他应用，然后点击继续处理；录音和检查点已保留。')
+        update(job_id, phase=f'等待其他应用释放显存：需要至少 {minimum} MiB 空闲，最多等待 120 秒')
+        time.sleep(2)
 
 
 def gpu_free():
@@ -261,10 +327,8 @@ def transcribe(wav_path, job_id, offset, quality):
     minimum = 4000 if quality == 'large-v3' else 2200
     if quality not in ASR_MODELS:
         release_asr_models()
-    while quality not in ASR_MODELS and gpu_free() < minimum:
-        update(job_id, phase=f'等待显存：需要至少 {minimum} MiB 空闲；不会卸载其他应用的模型')
-        time.sleep(2)
-        cancelled(job_id)
+    if quality not in ASR_MODELS:
+        ensure_asr_memory(minimum, job_id)
     cuda_paths()
     update(job_id, phase='GPU 转写：' + quality)
     model = ASR_MODELS.get(quality)
@@ -611,7 +675,7 @@ def runner():
         try:
             _, _, operation, job_id, argument = TASKS.get(timeout=60)
         except queue.Empty:
-            release_asr_models()
+            release_idle_models()
             continue
         requeue_deep = False
         try:
@@ -622,6 +686,8 @@ def runner():
                 process_live(job_id, argument)
             elif operation == 'watch_frame':
                 watch_service().process_frame(job_id, argument)
+            elif operation == 'cleanup':
+                pass  # Cleanup runs in finally, on the inference queue.
             else:
                 generator = DEEP_TASKS.setdefault(job_id, deep_analysis(job_id))
                 try:
@@ -644,7 +710,7 @@ def runner():
                 DEEP_TASKS.pop(job_id, None)
             TASKS.task_done()
             if TASKS.empty() and read_job(job_id)['state'] in {'complete', 'error', 'cancelled'}:
-                release_asr_models()
+                release_idle_models()
 
 
 def new_job(kind, args):
@@ -794,6 +860,8 @@ def dispatch(operation, args):
             export_job(identifier)
         elif job['completedChunks'] == len(job['chunks']):
             update(identifier, state='complete', phase='录音结束')
+        if read_job(identifier)['state'] == 'complete':
+            enqueue('cleanup', identifier)
         return public_job(read_job(identifier))
     if operation == 'cancel':
         return public_job(update(identifier, cancelRequested=True))

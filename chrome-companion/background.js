@@ -6,7 +6,7 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
    const pair=checkPair(message.pair);const [tab]=await chrome.tabs.query({active:true,currentWindow:true});if(!tab?.id||!/^https?:/.test(tab.url||''))throw Error('请在正常的视频网页里打开助手');
    await chrome.storage.session.set({binding:{...pair,tabId:tab.id}});await chrome.scripting.executeScript({target:{tabId:tab.id},files:['content.js']});const probe=await chrome.tabs.sendMessage(tab.id,{type:'probe'});return {ok:true,message:probe.videoFound?'已连接当前播放器，开始同步字幕与进度。':'已连接，但尚未找到可读播放器。先播放视频；若是内嵌页面，请打开 Panopto 独立播放器标签页再连接。'};
   }
-  if(message.type==='disconnect'){await chrome.storage.session.remove('binding');return {ok:true};}
+  if(message.type==='disconnect'){const {binding}=await chrome.storage.session.get('binding');if(binding)await chrome.tabs.sendMessage(binding.tabId,{type:'stop'}).catch(()=>{});await chrome.storage.session.remove('binding');return {ok:true};}
   if(message.type==='clock'){
    const {binding}=await chrome.storage.session.get('binding');if(!binding||sender.tab?.id!==binding.tabId)return {connected:false};
    const input=message.value;const value={capturedAt:input.capturedAt,playerTime:input.playerTime,playbackRate:input.playbackRate,paused:input.paused,caption:String(input.caption||'').slice(0,4000),sourcePage:input.sourcePage,kind:input.kind};

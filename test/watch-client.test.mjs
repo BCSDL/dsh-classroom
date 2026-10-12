@@ -1,6 +1,15 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {PairRegistry,validExtensionOrigin} from '../lib/watch-routes.js';
 import {pcmWav,cropBounds,frameDifference,clockLabel} from '../web/watch-utils.js';
+import fs from 'node:fs/promises';import vm from 'node:vm';
 test('caption capabilities expire, rotate, revoke and remain scoped to one job',()=>{let time=0;const r=new PairRegistry(()=>time);const a=r.create('a'),b=r.create('b');assert.equal(r.resolve(a.token).id,'a');r.create('a');assert.equal(r.resolve(a.token),undefined);assert.equal(r.resolve(b.token).id,'b');r.revoke('b');assert.equal(r.resolve(b.token),undefined);const c=r.create('c');time=17*60*60*1000;assert.equal(r.resolve(c.token),undefined);assert.equal(validExtensionOrigin('https://evil.test'),false);assert.equal(validExtensionOrigin('chrome-extension://'+'a'.repeat(32)),true);});
 test('captured PCM carries correct samples, rate and WAV sizes',async()=>{const b=await pcmWav([new Float32Array([-1,0,1])],3,16000).arrayBuffer();const v=new DataView(b);assert.equal(b.byteLength,50);assert.equal(v.getUint32(24,true),16000);assert.equal(v.getUint32(40,true),6);assert.equal(v.getInt16(44,true),-32767);assert.equal(v.getInt16(48,true),32767);});
 test('crop coordinates remain inside actual source dimensions; identical frames deduplicate',()=>{const r=cropBounds({x:.8,y:.9,w:2,h:2},1000,500);assert.ok(r.x+r.w<=1000);assert.ok(r.y+r.h<=500);const a=new Uint8ClampedArray([20,30,40,255]);assert.equal(frameDifference(a,a),0);assert.equal(frameDifference(null,a),1);assert.equal(clockLabel(3661),'01:01:01');assert.equal(clockLabel(null),'未同步');});
+test('companion reads native active subtitles and immediately reports pause/seek/rate changes without media URLs',async()=>{
+ const calls=[],listeners={};const video={duration:100,currentTime:12,playbackRate:1,paused:false,textTracks:[{activeCues:[{text:'A real caption'}]}]};
+ const context={window:{},document:{querySelectorAll:s=>s==='video'?[video]:[],addEventListener:(k,f)=>listeners[k]=f},chrome:{runtime:{sendMessage:v=>{calls.push(v);return Promise.resolve({ok:true});},onMessage:{addListener(){}}}},location:{origin:'https://school.test',pathname:'/player',search:'?secret=private'},setInterval(){},getComputedStyle:()=>({}),Date};
+ vm.runInNewContext(await fs.readFile(new URL('../chrome-companion/content.js',import.meta.url),'utf8'),context);
+ assert.equal(calls[0].value.caption,'A real caption');assert.equal(calls[0].value.playerTime,12);assert.equal(calls[0].value.sourcePage,'https://school.test/player');
+ video.currentTime=60;listeners.seeked();assert.equal(calls.at(-1).value.playerTime,60);video.paused=true;listeners.pause();assert.equal(calls.at(-1).value.paused,true);video.playbackRate=2;listeners.ratechange();assert.equal(calls.at(-1).value.playbackRate,2);
+ const n=calls.length;vm.runInNewContext(await fs.readFile(new URL('../chrome-companion/content.js',import.meta.url),'utf8'),context);assert.equal(calls.length,n);
+});

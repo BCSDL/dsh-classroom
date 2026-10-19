@@ -20,15 +20,17 @@
 <script type="module">
 import {marked} from '/api/classroom/marked.js';
 import DOMPurify from '/api/classroom/purify.js';
+import {classroomRPC,installProjectUI,sessionId} from '/api/classroom/session-ui.js';
+installProjectUI();
 function renderMarkdown(text){return DOMPurify.sanitize(marked.parse(text||''),{FORBID_TAGS:['img','video','audio','iframe','svg','math','form'],FORBID_ATTR:['style']});}
 const $=id=>document.getElementById(id);
 let selected=null,liveId=null,context=null,processor=null,microphone=null,chunks=[],samples=0,totalSamples=0,index=0,nextOffset=0;
 let recording=false,uploading=false,pumpPromise=null;
 const pendingSaves=new Set();
-const dbPromise=new Promise((resolve,reject)=>{const request=indexedDB.open('dsh-classroom-pending-audio',1);request.onupgradeneeded=()=>request.result.createObjectStore('chunks',{keyPath:'key'});request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
+const dbPromise=new Promise((resolve,reject)=>{const request=indexedDB.open('dsh-classroom-pending-audio'+(sessionId?'-'+sessionId:''),1);request.onupgradeneeded=()=>request.result.createObjectStore('chunks',{keyPath:'key'});request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
 async function dbCall(mode,callback){const db=await dbPromise;return new Promise((resolve,reject)=>{const transaction=db.transaction('chunks',mode);let value;const request=callback(transaction.objectStore('chunks'));request.onsuccess=()=>{value=request.result;};transaction.oncomplete=()=>resolve(value);transaction.onerror=()=>reject(transaction.error);transaction.onabort=()=>reject(transaction.error||Error('录音本地保存失败'));});}
 function error(e){$('error').textContent=e.message||String(e);}
-async function rpc(operation,args={}){const response=await fetch('/api/classroom/rpc',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({operation,args})});const body=await response.json();if(body.error)throw Error(body.error);return body.result;}
+const rpc=classroomRPC;
 async function upload(file,name=file.name){const response=await fetch('/api/classroom/upload?name='+encodeURIComponent(name),{method:'POST',body:file});const result=await response.json();if(result.error)throw Error(result.error);return result.path;}
 function options(){return {language:$('language').value,quality:$('quality').value,translate:$('translate').checked,summarize:$('summarize').checked,frameInterval:Number($('frameInterval').value)};}
 async function refresh(){const jobs=await rpc('list');$('jobs').replaceChildren();for(const job of jobs){const button=document.createElement('button');button.className='job';button.textContent=job.title+'\n'+job.state+' · '+(job.completedChunks||0)+' 段';button.onclick=()=>show(job.id);$('jobs').append(button);}}

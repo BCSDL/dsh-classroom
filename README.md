@@ -88,6 +88,16 @@ Override paths in the profile patch:
 
 ## Recording and enhancement
 
+### Conversation and project workflow (0.3.0)
+
+The official Session-scoped composer slot now contains a **课堂** button. It opens an embedded recording/file-analysis or Chrome-capture panel while the conversation remains available. The panel shows the actual Session `cwd` and output directory; sidebar grouping labels are not used as filesystem paths. Collapsing the panel keeps its recording alive; closing/reloading the browser still interrupts collection. Microphone and screen-sharing permissions require a human action.
+
+Tasks created from the embedded panel or `classroom` conversation tool bind to their originating Session and canonical workspace. Generated minutes, a readable transcript, SRT subtitles, captured frames/material evidence and recording audio (for live/watch jobs) are archived into `cwd/课堂记录/date-title-jobId/`. Source audio files for file analysis remain at their original path, recorded in `记录信息.json`; they are not duplicated. The central cache/checkpoints remain intact. Completion or failure posts a durable notice to the originating conversation without triggering an extra LLM response. Archive failures keep source results and retry; the project's job metadata exposes `archiveError`. Links include absolute output paths for workspace file tools.
+
+The tool supports `open` (`{"mode":"record"}` or `{"mode":"watch"}`) and bounded literal `search` (`{"query":"kinetic energy","limit":15}`) over archived reports in the current project, as well as the existing analysis operations. `open` asks the browser UI to open the panel; it never starts capture silently. Cross-project job access is rejected by scoped operations. Legacy standalone `/classroom` remains available with its global record list; existing unbound jobs are not moved automatically. Browser pending-upload queues are isolated by Session in the embedded workflow. Existing legacy pending uploads remain in the standalone page's original database.
+
+Project bindings and notification status persist in the central `project-bindings.json`. Renamed/deleted workspace directories and directory junctions pointing outside the workspace fail explicitly. Two simultaneous browser clients may operate the same project, but each job's original notification destination is preserved. These protections scope classroom outputs; they do not sandbox all other DSH tools.
+
 - Microphone PCM is uploaded as independently decodable WAV chunks, approximately every 15 seconds. Keep the page open while recording. Pending chunks are stored in browser IndexedDB and retry after connection recovery; the server acknowledges only after writing a durable copy. The most recent unsubmitted buffer can be lost if the browser crashes.
 - **Real-time:** faster-whisper large-v3-turbo, GPU `int8_float16`, then CPU speaker segmentation/embedding. Translation and summaries use the configured local Ollama model. Queue length and phases show lag; this is chunk-based processing, not instantaneous streaming.
 - **File/enhanced:** large-v3 by default, in bounded 60-second blocks. Raw audio and the real-time edition remain separate. A new enhanced job links to its parent.

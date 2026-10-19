@@ -1,6 +1,8 @@
 import {marked} from '/api/classroom/marked.js';
 import DOMPurify from '/api/classroom/purify.js';
 import {pcmWav,cropBounds,frameDifference,clockLabel} from '/api/classroom/watch-utils.js';
+import {classroomRPC,installProjectUI,sessionId} from '/api/classroom/session-ui.js';
+installProjectUI();
 const $=id=>document.getElementById(id);
 const markdown=text=>DOMPurify.sanitize(marked.parse(text||''),{FORBID_TAGS:['img','iframe','video','audio','form','svg','math'],FORBID_ATTR:['style']});
 let jobId=null,selected=null,stream=null,audio=null,processor=null,running=false,stopping=false;
@@ -8,9 +10,9 @@ let audioParts=[],audioSamples=0,totalSamples=0,audioIndex=0,frameIndex=0,frameT
 let captureStart=0,audioBase=0,lastFrameAt=0,lastFingerprint=null,crop={x:0,y:0,w:1,h:1},drag=null,frameOffset=0,audioOffset=0;
 const audioRows=new Map();
 const saving=new Set();const canvas=document.createElement('canvas'),small=document.createElement('canvas');small.width=64;small.height=40;
-const dbReady=new Promise((resolve,reject)=>{const r=indexedDB.open('dsh-classroom-watch-pending',1);r.onupgradeneeded=()=>r.result.createObjectStore('pending',{keyPath:'key'});r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+const dbReady=new Promise((resolve,reject)=>{const r=indexedDB.open('dsh-classroom-watch-pending'+(sessionId?'-'+sessionId:''),1);r.onupgradeneeded=()=>r.result.createObjectStore('pending',{keyPath:'key'});r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
 async function store(mode,fn){const db=await dbReady;return new Promise((resolve,reject)=>{const tx=db.transaction('pending',mode);const q=fn(tx.objectStore('pending'));let result;q.onsuccess=()=>result=q.result;tx.oncomplete=()=>resolve(result);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('本地缓存保存失败'));});}
-async function rpc(operation,args={}){const r=await fetch('/api/classroom/rpc',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({operation,args})});const v=await r.json();if(v.error)throw Error(v.error);return v.result;}
+const rpc=classroomRPC;
 async function upload(blob,name){const r=await fetch('/api/classroom/upload?name='+encodeURIComponent(name),{method:'POST',body:blob});const v=await r.json();if(v.error)throw Error(v.error);return v.path;}
 function error(e){$('error').textContent=e.message||String(e);}
 function saveTask(promise){saving.add(promise);promise.catch(error).finally(()=>saving.delete(promise));return promise;}

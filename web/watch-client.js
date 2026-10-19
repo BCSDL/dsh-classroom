@@ -2,7 +2,7 @@ import {marked} from '/api/classroom/marked.js';
 import DOMPurify from '/api/classroom/purify.js';
 import {pcmWav,cropBounds,frameDifference,clockLabel} from '/api/classroom/watch-utils.js';
 import {classroomRPC,installProjectUI,sessionId} from '/api/classroom/session-ui.js';
-installProjectUI();
+installProjectUI({getSelected:()=>selected,changed:async(operation,id)=>{if(operation==='delete'){selected=null;$('summary').replaceChildren();$('transcript').textContent='';$('frames').replaceChildren();}await refresh();if(id&&operation!=='delete')await show(id);}});
 const $=id=>document.getElementById(id);
 const markdown=text=>DOMPurify.sanitize(marked.parse(text||''),{FORBID_TAGS:['img','iframe','video','audio','form','svg','math'],FORBID_ATTR:['style']});
 let jobId=null,selected=null,stream=null,audio=null,processor=null,running=false,stopping=false;
@@ -42,7 +42,7 @@ async function start(){
  try{
   if(!navigator.mediaDevices?.getDisplayMedia)throw Error('请使用桌面 Chrome，并从 localhost/127.0.0.1 打开 DSH。');
   stream=await navigator.mediaDevices.getDisplayMedia({video:{displaySurface:'browser',frameRate:{ideal:5,max:8}},audio:true,selfBrowserSurface:'exclude',systemAudio:'exclude'});
-  captureStart=Date.now();const job=await rpc('create_watch',{title:$('title').value||'Chrome 课堂视频',captureStartedAt:captureStart,sourcePage:$('sourcePage').value,options:{language:$('language').value,translate:$('translate').checked,summarize:$('summarize').checked}});
+  captureStart=Date.now();const job=await rpc('create_watch',{title:$('title').value||'Chrome 课堂视频',autoTitle:!$('title').value.trim(),captureStartedAt:captureStart,sourcePage:$('sourcePage').value,options:{language:$('language').value,translate:$('translate').checked,summarize:$('summarize').checked}});
   jobId=job.id;audioParts=[];audioSamples=0;totalSamples=0;audioIndex=0;frameIndex=0;lastFingerprint=null;lastFrameAt=0;running=true;
   $('video').srcObject=stream;await $('video').play();
   if(stream.getAudioTracks().length){audio=new AudioContext({sampleRate:16000});await audio.resume();audioBase=(Date.now()-captureStart)/1000;const source=audio.createMediaStreamSource(stream);processor=audio.createScriptProcessor(4096,1,1);const silence=audio.createGain();silence.gain.value=0;source.connect(processor);processor.connect(silence);silence.connect(audio.destination);processor.onaudioprocess=e=>{if(!running)return;const part=new Float32Array(e.inputBuffer.getChannelData(0));audioParts.push(part);audioSamples+=part.length;if(audioSamples>=audio.sampleRate*15)saveTask(flushAudio());};}

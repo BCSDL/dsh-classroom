@@ -152,5 +152,50 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(self.worker.dispatch('finish', {'id': job['id']})['state'], 'complete')
         self.assertEqual(self.worker.TASKS.get()[2], 'cleanup')
 
+    def test_recycle_requires_stopped_work_and_preserves_dependents(self):
+        parent = self.worker.dispatch('create_live', {})
+        with self.assertRaisesRegex(ValueError, '先结束'):
+            self.worker.dispatch('prepare_delete', {'id': parent['id']})
+        self.worker.update(parent['id'], state='complete')
+        child = self.worker.dispatch('create_live', {})
+        self.worker.update(child['id'], parentId=parent['id'], state='complete')
+        with self.assertRaisesRegex(ValueError, '增强版'):
+            self.worker.dispatch('prepare_delete', {'id': parent['id']})
+        self.worker.dispatch('prepare_delete', {'id': child['id']})
+        self.worker.dispatch('prepare_delete', {'id': parent['id']})
+        self.assertEqual(self.worker.dispatch('list', {}), [])
+        with self.assertRaisesRegex(ValueError, '先恢复原始'):
+            self.worker.dispatch('restore_delete', {'id': child['id']})
+        self.worker.dispatch('restore_delete', {'id': parent['id']})
+        self.worker.dispatch('restore_delete', {'id': child['id']})
+        self.assertEqual(len(self.worker.dispatch('list', {})), 2)
+
+    def test_automatic_title_uses_content_once_and_manual_name_wins(self):
+        job = self.worker.dispatch('create_live', {})
+        self.worker.update(job['id'], state='complete', summary='Kinetic energy is one half times mass times velocity squared.')
+        with patch.object(self.worker, 'ollama', return_value='{"title":"Kinetic Energy and Motion"}') as model:
+            self.worker.generate_title(job['id'])
+            self.worker.generate_title(job['id'])
+            model.assert_called_once()
+        self.assertEqual(self.worker.read_job(job['id'])['title'], 'Kinetic Energy and Motion')
+        self.assertIn('Kinetic Energy and Motion', (self.worker.job_dir(job['id']) / 'report.md').read_text(encoding='utf-8'))
+        self.worker.update(job['id'], titleAttempted=False)
+        def concurrent_rename(*_args, **_kwargs):
+            self.worker.dispatch('rename', {'id': job['id'], 'title': 'My manual title'})
+            return '{"title":"Ignored model title"}'
+        with patch.object(self.worker, 'ollama', side_effect=concurrent_rename):
+            self.worker.generate_title(job['id'])
+        self.assertEqual(self.worker.read_job(job['id'])['title'], 'My manual title')
+
+    def test_title_failure_does_not_fail_or_block_completed_record(self):
+        job = self.worker.dispatch('create_live', {})
+        self.worker.update(job['id'], state='complete', summary='Enough classroom content to generate a descriptive topic title.')
+        with patch.object(self.worker, 'ollama', side_effect=OSError('offline')):
+            self.worker.generate_title(job['id'])
+        saved = self.worker.read_job(job['id'])
+        self.assertEqual(saved['state'], 'complete')
+        self.assertFalse(saved['titlePending'])
+        self.assertIn('offline', saved['titleError'])
+
 if __name__ == '__main__':
     unittest.main()

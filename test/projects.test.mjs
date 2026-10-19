@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {join,resolve,relative} from 'node:path';
 import vm from 'node:vm';
 import {ClassroomProjects} from '../lib/projects.js';
+import {classroomNotifier} from '../lib/notifications.js';
 
 async function fixture(t){
  const base=await fs.mkdtemp(join(tmpdir(),'classroom-project-test-'));t.after(async()=>{const real=resolve(base),part=relative(resolve(tmpdir()),real);assert(part&&!part.startsWith('..'));await fs.rm(real,{recursive:true,force:true});});
@@ -31,4 +32,9 @@ test('an external directory junction is rejected before an inference task is cre
 test('conversation open requests do not invoke microphone or inference automatically',async t=>{const f=await fixture(t);const result=await f.service.run('open',{mode:'watch'},'a');assert.equal(result.openRequested.mode,'watch');assert.equal(f.jobs.size,0);assert.equal((await f.service.info('a')).openRequested.id,result.openRequested.id);await assert.rejects(f.service.info('missing'),/Missing/);});
 test('browser plugin uses the session slot injection seam',async()=>{
  let module,registration;vm.runInNewContext(await fs.readFile(new URL('../lib/client.js',import.meta.url),'utf8'),{window:{__ModuleLoader__:{load:value=>module=value}}});const exported=module.factory(()=>({}));exported.apply({slots:{inject:(_name,fn)=>fn(),register:entry=>registration=entry},on(){}});assert.equal(registration.name,'conversation.input.left');assert.equal(registration.inject('session-a').sessionId,'session-a');assert.equal(module.id,'dsh-classroom');
+});
+test('notification adapter handles the actual controller result and deduplicates persisted notices',async()=>{
+ const events=[],calls=[];const controller={inspect:async()=>({events}),resolveAgent:async()=>({agent:{session:{append:(type,data,intent)=>{events.push({type,data});calls.push(intent);}}}})};
+ const notify=classroomNotifier(controller,value=>value);await notify('a','key','Ready');await notify('a','key','Duplicate');assert.equal(events.length,1);assert.equal(events[0].data.content[0].text,'Ready');assert.deepEqual(calls[0],{surfaceOp:'append'});
+ await assert.rejects(classroomNotifier({...controller,resolveAgent:async()=>({error:Error('Writer unavailable')})},value=>value)('a','different-key','text'),/Writer unavailable/);
 });

@@ -1,0 +1,7 @@
+# Reused software and model provenance
+
+- `dsh-knowledge-base-local@1.2.5`, MIT, https://github.com/CodfishYao/dsh-knowledge-base-local . npm integrity: `sha512-EKw0US3xfGU3Mdwr9X5ZSjIhUkGONrVid3wmh2Oxmmsh2PEf+rhCpiOBIWr+BrOcYqsKywG2oSMCn0Fx0089kQ==`. We use the published Markdown/version/BM25 data engine. We do not mount its Host HTTP/MCP endpoints or modify its source. Classroom routes retain the existing DSH Connection authentication.
+- Multilingual E5 small ONNX INT8: https://huggingface.co/Xenova/multilingual-e5-small , pinned revision `761b726dd34fb83930e26aab4e9ac3899aa1fa78`. Downloaded separately, not redistributed here. Inference explicitly selects `CPUExecutionProvider`, two CPU threads; it does not offload the classroom GPU model to RAM. Source model: https://huggingface.co/intfloat/multilingual-e5-small . Retain the upstream model terms and license with downloaded weights.
+- Existing Whisper, sherpa-onnx, WeSpeaker, Gemma, FFmpeg and document readers keep their upstream licenses. This MIT plugin does not grant rights to redistribute recordings, proprietary software or third-party model weights.
+
+Candidate comparison: `lemoncat7/dsh-knowledge` is another MIT plugin with a full notes/knowledge service, but its current README targets DSH 0.2.1-rc.2; this installation uses 0.2.0-rc.2. `mervyn-teo/dsh-plugin-rag` focuses on conversation indexing. Neither was silently enabled alongside the classroom knowledge engine. Marketplace labels and stars are not functional acceptance evidence.

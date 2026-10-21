@@ -4,6 +4,34 @@ A local-first DeepSeek Harness plugin for English/Chinese classes. Import record
 
 **Pre-release:** this plugin provides a pipeline, not a guarantee of commercial-service accuracy or latency. Test with your classroom microphone and recordings before relying on the notes. Human review remains necessary for ambiguous speech, equations, names, accents and overlapping speakers.
 
+## 0.5.0：课堂工作台与持久知识库
+
+在原对话点击 **课堂**，可切换 **录音 / 文件、Chrome 视频、知识库**。所有页面使用现有 DSH 端口和认证，不替换启动入口，也不修改独立 Codex CLI。
+
+- **知识保存**：课堂原文、翻译、摘要、时间点笔记、课件页图分析、视频画面证据自动入库。原始导入资料按 SHA-256 复制保存，移动用户原文件不会破坏后续引用。没有成功提取的文件也保留资料目录条目和失败状态，不能冒充已读懂内容。
+- **现成数据层优先**：复用 `dsh-knowledge-base-local@1.2.5` 的 Markdown、版本、回收和 BM25 数据层，保留其许可证。没有挂载它的独立 Host HTTP/MCP 路由。参见 THIRD_PARTY.md。
+- **中英检索与问答**：多语言 E5 small INT8 在 CPU 上运行，语义向量按原文块持久保存，结合 BM25 检索；默认当前项目，可显式选择全部课程。问答只收到实际检索的原文，回答保留可读取的来源；无有效来源编号时返回资料不足。检索分数不是准确率，无法保证每个问法都召回所有知识。
+- **自动附件入库**：DSH 原生消息附件会保存原始副本并去重排队。为避免同一块显卡抢占，自动 GPU 分析在当前 DSH 回复结束后启动。回答前自动进行当前项目检索；排队成功不等于分析完成。
+- **转写先显示**：浏览器录音默认约 5 秒一块，可选 10/15 秒；转写先保存，翻译和摘要随后排队。页面显示等待分析的段数。不是词级连续流式，冷启动、分人及模型切换会增加延迟。
+- **聊天和课堂共用显卡**：通过 DSH 公开推理/会话事件协调，聊天开始前等待当前课堂推理步骤结束并释放 ASR；聊天产生完整助手消息后再继续课堂队列。原始音频采集持续。其他 Ollama/CLI/游戏客户端不在这项协调范围内，不能承诺任意外部并发都满足 16 GB。云端聊天可配置 `coordinateChatGPU:false`。
+- **持续麦克风录音**：Windows 可先列出设备，人工选择并点击“开始本机持续录音”。FFmpeg 采集独立于网页；关闭网页仍采集，退出 DSH 则结束，子进程由 Windows Job Object 保护。已关闭片段落盘，异常重启后的分析可继续；最后未完整写出的片段仍可能损失。设备/驱动兼容性需要实机确认。Chrome 标签页共享仍需页面保持打开和人工授权，不能静默续接浏览器共享。
+- **校对与分人**：点句回听、播放高亮、逐句校对、说话人名称、合并、按时间段修正、修订历史和恢复。原 ASR 检查点保留。校对会标记旧翻译和摘要过时，过时内容退出知识检索；重新总结会重译过时块并遍历所有保存的原文，采用有检查点的分层归纳。人工重写后单词时间对齐失效，保留句子时间。
+- **课堂笔记**：保存时间点、课件名称/页码与书签；设置术语表供后续转写使用。关键词提醒可在页面显示，桌面通知需用户允许。后台节流、系统睡眠和页面关闭会影响浏览器提醒。
+- **双区域与多播放器**：可分别保存课件、教授裁剪区域，各自取样去重；字幕助手分别记录它能访问的播放器，用户选择主时间轴以及区域对应时间轴。无法访问的跨域 iframe 仍需在授权的独立播放器页连接。不是连续原视频存档或逐帧理解，DOM 重排、播放器版本及学校网站仍需验证。
+- **课件时间对应**：保留页面和取样时间，并对全部转写块提供词语重合的候选对应；候选明确标为未验证，不把相似内容当作精确同步。可通过时间点笔记人工关联。PPTX 复杂版式仍推荐先导出 PDF。
+- **文件和迁移**：批量导入音视频/课件；增加 Word/PDF 导出，保留 Markdown/SRT。PDF/Word 渲染标题、段落、列表、表格和代码；复杂 LaTeX 保留源表达式。完整 ZIP 包含原始资料和知识数据，可在另一台机器合并到当前项目；原有知识保留。持续云同步和多人协同需要另行指定服务，未偷偷开放 LAN/公网端口。
+- **清理与维护**：回收区支持明确输入标题后永久删除记录及缓存；原始知识资料另外保留。可预览并明确清理超过保留天数、没有引用的原始资料，默认不自动删除。提供依赖自检、固定 SHA 安装与回滚 `.bat`/PowerShell 入口。清理不会删除用户原始输入文件。
+
+### 准备语义检索
+
+已准备过语音环境时运行 `scripts/setup-knowledge.ps1`；新环境运行 `scripts/setup.ps1 -DownloadModels`，会一起准备 CPU 检索模型。模型按固定上游 revision 下载，权重不包含在插件包中。未准备好时保留 BM25 检索并显示提示。
+
+知识目录默认为 `$DSH_HOME/classroom/knowledge`：`docs` 是可直接阅读的 Markdown，`assets` 保存原始资料，`semantic` 是可重建的 CPU 向量，`versions/trash` 保存版本和回收内容。卸载插件不删除这些资料。持久储存和来源检索降低遗忘风险，不构成零丢失、零幻觉或所有文件都可解析的保证。
+
+### 验证范围
+
+单元/协议测试、真实短英文音频与本地 Gemma、实际 CPU 中英检索、带来源问答、备份合并、Word/PDF 页面检查分别验证。四小时文件验收使用首尾英文语音、中间大量静音的合成时间线，240 个块完成；它不是四小时真实课堂、实体麦克风或学校播放器的实机压力测试。具体证据以发布验收记录为准，不拿安装成功或测试数量代替质量结论。
+
 ## Install
 
 ### Chrome streaming playback (0.2.0)
@@ -104,14 +132,14 @@ The tool supports `open` (`{"mode":"record"}` or `{"mode":"watch"}`) and bounded
 
 Project bindings and notification status persist in the central `project-bindings.json`. Renamed/deleted workspace directories and directory junctions pointing outside the workspace fail explicitly. Two simultaneous browser clients may operate the same project, but each job's original notification destination is preserved. These protections scope classroom outputs; they do not sandbox all other DSH tools.
 
-- Microphone PCM is uploaded as independently decodable WAV chunks, approximately every 15 seconds. Keep the page open while recording. Pending chunks are stored in browser IndexedDB and retry after connection recovery; the server acknowledges only after writing a durable copy. The most recent unsubmitted buffer can be lost if the browser crashes.
+- Microphone PCM is uploaded as independently decodable WAV chunks, approximately every 5 seconds by default (configurable 5/10/15). Keep the page open while recording. Pending chunks are stored in browser IndexedDB and retry after connection recovery; the server acknowledges only after writing a durable copy. The most recent unsubmitted buffer can be lost if the browser crashes.
 - **Real-time:** faster-whisper large-v3-turbo, GPU `int8_float16`, then CPU speaker segmentation/embedding. Translation and summaries use the configured local Ollama model. Queue length and phases show lag; this is chunk-based processing, not instantaneous streaming.
 - **File/enhanced:** large-v3 by default, in bounded 60-second blocks. Raw audio and the real-time edition remain separate. A new enhanced job links to its parent.
 - Restarted jobs pause with their checkpoints intact. Click **继续处理** to resume. Cancel stops processing and preserves data.
 - Markdown reports and SRT subtitles remain in each job directory. Word-level anonymous speaker labels and speaker-turn timestamps remain in JSON results. Labels can change across revisions and are not real-world identity recognition.
 - ASR loads only on GPU. When VRAM is insufficient it asks Ollama to unload only the configured classroom model (including an existing chat lease on that same model). Other Ollama models and other applications are left alone. Any remaining shortage fails after a bounded 120-second wait with a resumable error; there is no CPU fallback. The streaming model is released before image analysis, a new LLM load, completion, or 60 seconds without queued work. File-quality weights are released after each block. Available-memory checks are a guard, not a universal VRAM guarantee against concurrent applications.
 - Classroom Gemma requests use a five-minute keep-alive. When work finishes or the inference queue is idle for 60 seconds, the worker also requests immediate unloading of its own last Gemma lease. If another client has refreshed that lease, normal cleanup leaves it alone. Ollama is shared across clients: simultaneous calls can race with lease inspection, and reloading after ASR yields adds latency. Set the Ollama server's global `OLLAMA_KEEP_ALIVE` to `5m` as well so ordinary DSH chat cannot leave a 24-hour lease. Closing the worker abruptly leaves the model to expire instead of running cleanup.
-- Inference is serialized with microphone chunks prioritized. File jobs yield after each 60-second audio block; source analysis yields after each page/frame or summary step. A currently running inference still has to finish, so simultaneous work can increase live latency.
+- Inference is serialized with microphone chunks prioritized. File jobs yield after each 60-second audio block; source analysis yields after each page/frame or summary step. A currently running inference still has to finish. DSH chat inference is coordinated through public events; other clients are not covered, and waiting increases live latency.
 
 ## Formats and evidence
 

@@ -4,12 +4,12 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
   if(message.type==='connect'){
    if(sender.tab)throw Error('Only the extension popup may initiate pairing');
    const pair=checkPair(message.pair);const [tab]=await chrome.tabs.query({active:true,currentWindow:true});if(!tab?.id||!/^https?:/.test(tab.url||''))throw Error('请在正常的视频网页里打开助手');
-   await chrome.storage.session.set({binding:{...pair,tabId:tab.id}});await chrome.scripting.executeScript({target:{tabId:tab.id},files:['content.js']});const probe=await chrome.tabs.sendMessage(tab.id,{type:'probe'});return {ok:true,message:probe.videoFound?'已连接当前播放器，开始同步字幕与进度。':'已连接，但尚未找到可读播放器。先播放视频；若是内嵌页面，请打开 Panopto 独立播放器标签页再连接。'};
+   await chrome.storage.session.set({binding:{...pair,tabId:tab.id}});await chrome.scripting.executeScript({target:{tabId:tab.id,allFrames:true},files:['content.js']});const probe=await chrome.tabs.sendMessage(tab.id,{type:'probe'});return {ok:true,message:probe.videoFound?'已连接当前播放器，开始同步字幕与进度。':'已连接，但尚未找到可读播放器。先播放视频；若是内嵌页面，请打开 Panopto 独立播放器标签页再连接。'};
   }
   if(message.type==='disconnect'){const {binding}=await chrome.storage.session.get('binding');if(binding)await chrome.tabs.sendMessage(binding.tabId,{type:'stop'}).catch(()=>{});await chrome.storage.session.remove('binding');return {ok:true};}
   if(message.type==='clock'){
    const {binding}=await chrome.storage.session.get('binding');if(!binding||sender.tab?.id!==binding.tabId)return {connected:false};
-   const input=message.value;const value={capturedAt:input.capturedAt,playerTime:input.playerTime,playbackRate:input.playbackRate,paused:input.paused,caption:String(input.caption||'').slice(0,4000),sourcePage:input.sourcePage,kind:input.kind};
+   const input=message.value;const value={playerId:'f'+(sender.frameId||0)+':'+String(input.playerId||'v0').slice(0,40),capturedAt:input.capturedAt,playerTime:input.playerTime,playbackRate:input.playbackRate,paused:input.paused,caption:String(input.caption||'').slice(0,4000),sourcePage:input.sourcePage,kind:input.kind};
    const response=await fetch(binding.origin+'/api/classroom/watch/event',{method:'POST',credentials:'omit',headers:{'content-type':'application/json','authorization':'Bearer '+binding.token},body:JSON.stringify(value)});
    if(!response.ok){if(response.status===403)await chrome.storage.session.remove('binding');throw Error('本地 DSH 已停止、采集已结束或配对过期，请重新连接');}return {ok:true};
   }

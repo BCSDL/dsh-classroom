@@ -15,6 +15,7 @@ if ($Engineering) {
 if ($DownloadModels) {
     & $pythonExe (Join-Path $packageRoot 'backend\download_models.py') (Join-Path $Runtime 'models')
     if ($LASTEXITCODE -ne 0) { throw 'Model download failed; existing files are preserved for retry' }
+    & (Join-Path $PSScriptRoot 'setup-knowledge.ps1') -Runtime $Runtime
 }
 Write-Output "Python: $pythonExe"
 Write-Output ('Models: ' + (Join-Path $Runtime 'models'))

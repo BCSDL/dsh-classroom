@@ -14,6 +14,21 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 MANIFEST = '.classroom/manifest.json'
 
 
+def publish_record(source, destination):
+    """Windows may briefly lock newly written exports while indexing/scanning."""
+    for attempt in range(8):
+        try:
+            source.replace(destination)
+            return
+        except OSError as error:
+            retryable = isinstance(error, PermissionError) or getattr(error, 'winerror', None) in {5, 32, 33}
+            if not retryable or destination.exists():
+                raise
+            if attempt == 7:
+                raise RuntimeError('Windows 仍占用恢复目录，请稍后重新合并备份；原始备份和已恢复记录保留') from error
+            time.sleep(min(.05 * 2 ** attempt, .8))
+
+
 def linked(path):
     return path.is_symlink() or getattr(path, 'is_junction', lambda: False)()
 
@@ -233,12 +248,15 @@ def restore_records(w, staging, scope='unbound'):
             if job.get('source') and not Path(job['source']).is_relative_to(w.ROOT):
                 job.update(source=None, missingOriginal=True)
             job_path.write_text(json.dumps(job, ensure_ascii=False), encoding='utf-8')
-            temporary.replace(target)
+            publish_record(temporary, target)
             saved[key] = identifier
             w.atomic_json(map_path, saved)
             records.append({'id': identifier, 'deleted': bool(entry.get('deleted')), 'reused': False})
         except Exception:
             if temporary.exists():
-                shutil.rmtree(temporary)
+                try:
+                    shutil.rmtree(temporary)
+                except OSError as cleanup_error:
+                    print('Restore temporary cleanup deferred: ' + str(cleanup_error), file=__import__('sys').stderr, flush=True)
             raise
     return {'mapping': mapping, 'records': records}

@@ -4,6 +4,10 @@ A local-first DeepSeek Harness plugin for English/Chinese classes. Import record
 
 **Pre-release:** this plugin provides a pipeline, not a guarantee of commercial-service accuracy or latency. Test with your classroom microphone and recordings before relying on the notes. Human review remains necessary for ambiguous speech, equations, names, accents and overlapping speakers.
 
+## 0.6.1：Windows 恢复目录占用修复
+
+真实 GPU 流程生成含图片 PDF 后，Windows 可能短暂占用刚复制的恢复目录。发布目录改为有限重试；持续占用会给出明确错误，原始备份和已经恢复的记录保留，不修改系统权限或关闭安全软件。
+
 ## 0.6.0：完整迁移与课堂复习工作台
 
 - **迁移复查与修正**：新备份包含知识、原件、独立笔记历史、回收内容，以及停止处理的课堂任务、音频片段、逐字稿修订、批注和播放器时间轴。SHA-256 清单在合并前验证；文件损坏/缺失、路径越界、重复 ZIP 条目或空间不足会报错。导出前需结束录音并完成或暂停分析。旧版 ZIP 可读，但缺少的历史任务和完整性清单不能凭空补回。

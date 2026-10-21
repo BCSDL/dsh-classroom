@@ -70,5 +70,29 @@ class PortableTests(unittest.TestCase):
         again=self.w.dispatch('restore_records',{'path':staged['path'],'scope':'another-project'})
         self.assertEqual(again['mapping'][self.id],new)
         self.assertEqual(self.w.TASKS.qsize(),0)
+    def test_transient_windows_directory_lock_retries_without_copying_duplicate_record(self):
+        archive=self.w.dispatch('knowledge_backup',{});staged=self.w.dispatch('knowledge_restore',{'path':archive['path']})
+        original=Path.replace;attempts=[]
+        def locked(path,target):
+            if path.name.endswith('.restore-part'):
+                attempts.append(str(path))
+                if len(attempts)<3:raise PermissionError(13,'temporary Windows sharing lock')
+            return original(path,target)
+        with patch.object(Path,'replace',locked),patch('portable_archive.time.sleep'):
+            result=self.w.dispatch('restore_records',{'path':staged['path'],'scope':'locked'})
+        self.assertEqual(len(attempts),3);self.assertEqual(len(result['records']),1)
+        self.assertTrue(self.w.job_dir(result['records'][0]['id']).is_dir())
+        self.assertFalse(list((self.root/'jobs').glob('*.restore-part')))
+    def test_persistent_directory_lock_leaves_backup_and_existing_record_untouched(self):
+        archive=self.w.dispatch('knowledge_backup',{});staged=self.w.dispatch('knowledge_restore',{'path':archive['path']})
+        original=Path.replace;before=(self.w.job_dir(self.id)/'job.json').read_bytes()
+        def locked(path,target):
+            if path.name.endswith('.restore-part'):raise PermissionError(13,'persistent lock')
+            return original(path,target)
+        with patch.object(Path,'replace',locked),patch('portable_archive.time.sleep'):
+            with self.assertRaisesRegex(RuntimeError,'原始备份'):
+                self.w.dispatch('restore_records',{'path':staged['path'],'scope':'locked'})
+        self.assertEqual((self.w.job_dir(self.id)/'job.json').read_bytes(),before)
+        self.assertTrue(Path(archive['path']).is_file());self.assertFalse(list((self.root/'jobs').glob('*.restore-part')))
 
 if __name__ == '__main__': unittest.main()

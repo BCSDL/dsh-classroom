@@ -1,4 +1,4 @@
-param([string]$Runtime = (Join-Path $env:USERPROFILE '.local-ai-tools\classroom'), [switch]$DownloadModels, [switch]$Engineering)
+﻿param([string]$Runtime = (Join-Path $env:USERPROFILE '.local-ai-tools\classroom'), [switch]$DownloadModels, [switch]$Engineering)
 $ErrorActionPreference = 'Stop'
 $packageRoot = Split-Path $PSScriptRoot -Parent
 $pythonExe = Join-Path $Runtime 'Scripts\python.exe'

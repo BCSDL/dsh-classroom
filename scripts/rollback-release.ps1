@@ -1,4 +1,4 @@
-param([string]$BackupPath)
+﻿param([string]$BackupPath)
 $ErrorActionPreference='Stop'
 if(-not $BackupPath){$BackupPath=Read-Host '输入 install-release.ps1 输出的完整备份目录'}
 $metadata=Get-Content -LiteralPath (Join-Path $BackupPath 'classroom-release.json') -Raw | ConvertFrom-Json

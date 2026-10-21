@@ -4,7 +4,22 @@ A local-first DeepSeek Harness plugin for English/Chinese classes. Import record
 
 **Pre-release:** this plugin provides a pipeline, not a guarantee of commercial-service accuracy or latency. Test with your classroom microphone and recordings before relying on the notes. Human review remains necessary for ambiguous speech, equations, names, accents and overlapping speakers.
 
+## 0.6.0：完整迁移与课堂复习工作台
+
+- **迁移复查与修正**：新备份包含知识、原件、独立笔记历史、回收内容，以及停止处理的课堂任务、音频片段、逐字稿修订、批注和播放器时间轴。SHA-256 清单在合并前验证；文件损坏/缺失、路径越界、重复 ZIP 条目或空间不足会报错。导出前需结束录音并完成或暂停分析。旧版 ZIP 可读，但缺少的历史任务和完整性清单不能凭空补回。
+- **安全合并**：恢复任务使用新编号并重定位本机路径，绑定到发起恢复的当前项目/对话；保留本机现有任务和笔记，不自动执行备份中的推理。相同备份重复导入复用已恢复的任务；更新过的任务形成新快照。回收状态和独立笔记历史一并保存。备份较大，导出、暂存和合并需要足够磁盘空间；它是本机可携带备份，没有云同步或账号服务。
+- **手写与截图批注**：白板画笔、颜色/粗细、橡皮、撤销；可导入截图，或点击按钮通过 Chrome 人工选择共享范围截取一张。保存为带时间/页码的 PNG，可排队让现有 Gemma 读取，识别内容进入摘要与知识检索。批注图片进入项目归档、完整备份和 Word/PDF 附录。跨次编辑保存的是图片，不是无限可逆的矢量笔画；模糊手写可能无法识别。
+- **复习模板**：课堂笔记、康奈尔、考前复习/自测、解题推导、会议纪要；可用于新录音或基于完整资料重新生成，模板变更不会复用旧模板的总结缓存。考前模板不会预测真实试题。
+- **同步复习**：CPU 多语言语义匹配课件页与转写时间段，展示页图、原文和可回听候选；可以手动校准起止时间并确认，确认结果持久保存。语义分数不是准确率，当前不承诺自动精确同步、跨播放器完整兼容或短暂画面不遗漏。
+- **多选整理**：项目内按标题筛选课堂记录/独立知识笔记，分页、多选、批量移入回收区/恢复，导出所选记录 ZIP 或合并笔记 Markdown。原件保留，永久删除仍需单条明确确认。
+- **运行与安装**：增加 Windows `scripts/setup-windows.bat`，可检查/引导安装 Node、uv、FFmpeg、Ollama，准备隔离 Python/语音/检索模型，并安装指定公开固定提交。已有组件不会强制升级，不改 Codex CLI、启动器或模型上下文。首次 DSH/Ollama 模型连接仍使用官方设置；新电脑还需有足够显存、磁盘、下载权限及驱动。WinGet 组件可需要系统安装权限。
+- **故障恢复**：原生录音异常退出后清理失效的运行标志；点击继续时尝试恢复尚未确认的本地音频片段。无法解码的末尾数据会记录警告，不能恢复从未录到的声音。批注识别失败可随记录继续处理。Windows PowerShell 5.1 的中文脚本编码已修正。
+
+安装来源说明：[Microsoft WinGet](https://learn.microsoft.com/en-us/windows/package-manager/winget/install)、[uv 官方安装](https://docs.astral.sh/uv/getting-started/installation/)、[FFmpeg 下载](https://ffmpeg.org/download.html)、[Ollama Windows](https://ollama.com/download/windows)。本版本没有增加常驻 GPU 模型。
+
 ## 0.5.0：课堂工作台与持久知识库
+
+下面保留 0.5.0 的架构和使用说明；新备份/复习功能以 0.6.0 节为准。
 
 在原对话点击 **课堂**，可切换 **录音 / 文件、Chrome 视频、知识库**。所有页面使用现有 DSH 端口和认证，不替换启动入口，也不修改独立 Codex CLI。
 

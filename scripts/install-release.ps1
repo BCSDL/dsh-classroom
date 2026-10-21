@@ -1,4 +1,4 @@
-param([string]$Commit, [ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$Profile='web')
+﻿param([string]$Commit, [ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$Profile='web')
 $ErrorActionPreference='Stop'
 if (-not $Commit) { $Commit=Read-Host '粘贴已审核的 BCSDL/dsh-classroom 完整提交 SHA（40 位）' }
 if ($Commit -notmatch '^[a-f0-9]{40}$') { throw '需要完整的固定提交 SHA，不安装浮动 main。' }

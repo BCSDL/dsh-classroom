@@ -8,6 +8,32 @@ import time
 import wave
 
 
+def recover_saved_segments(w, identifier):
+    """On an explicit resume, repair and submit unacknowledged native WAVs."""
+    job = w.read_job(identifier)
+    if not job.get('nativeRecoveryPending'):
+        return job
+    recovered, warnings, offset = 0, [], 0.0
+    for index, source in enumerate(sorted((w.job_dir(identifier) / 'inputs').glob('native-*.wav'))):
+        if str(index) in job['chunks']:
+            with wave.open(job['chunks'][str(index)]['path'], 'rb') as audio:
+                offset = job['chunks'][str(index)]['offset'] + audio.getnframes()/audio.getframerate()
+            continue
+        target = w.job_dir(identifier) / 'inputs' / f'recovered-native-{index:08d}.wav'
+        try:
+            w.normalize(source, target, identifier)
+            with wave.open(str(target), 'rb') as audio:
+                duration = audio.getnframes()/audio.getframerate()
+            if duration:
+                job['chunks'][str(index)] = {'path': str(target), 'offset': offset}
+                offset += duration
+                recovered += 1
+        except Exception as error:
+            warnings.append(source.name + ': ' + str(error))
+    return w.update(identifier, chunks=job['chunks'], recordingFinished=True, nativeRecoveryPending=False,
+                    recoveredNativeChunks=recovered, recoveryWarnings=warnings)
+
+
 def protect_child(process):
     """Windows closes this handle on worker exit, including abrupt worker termination."""
     from ctypes import wintypes

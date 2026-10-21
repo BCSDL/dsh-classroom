@@ -1,4 +1,4 @@
-param([string]$Runtime=(Join-Path $env:USERPROFILE '.local-ai-tools\classroom'))
+﻿param([string]$Runtime=(Join-Path $env:USERPROFILE '.local-ai-tools\classroom'))
 $ErrorActionPreference = 'Stop'
 $runtimePath = $Runtime
 $pythonPath = Join-Path $runtimePath 'Scripts\python.exe'

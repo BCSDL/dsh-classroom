@@ -20,6 +20,7 @@ from pathlib import Path
 from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).parent))
 import studio
+import workspace
 
 _WATCH = None
 _NATIVE = None
@@ -684,7 +685,7 @@ def export_job(job_id):
               result_text(job_id) + '\n\n## 双语摘要\n\n' + job.get('summary', '') +
               '\n\n## 分段翻译与分析\n\n' + '\n\n'.join(translations) +
               '\n\n## 课件和视频融合分析\n\n' + job.get('deepSummary', '') +
-              '\n\n## 笔记与书签\n\n' + '\n\n'.join(f"[{n['time']:.1f}s] {n['text']}" for n in job.get('notes', [])))
+              '\n\n## 笔记与书签\n\n' + '\n\n'.join(f"[{n['time']:.1f}s] {n['text']}\n{n.get('analysis','')}" for n in job.get('notes', [])))
     if job['kind'] == 'watch':
         report += watch_service().report(job_id)
     (directory / 'report.md').write_text(report, encoding='utf-8')
@@ -806,6 +807,8 @@ def runner():
                     process_live(job_id, argument)
                 elif operation == 'enrich':
                     process_enrich(job_id, argument)
+                elif operation == 'annotation':
+                    workspace.analyze_annotation(SimpleNamespace(**globals()), job_id, argument)
                 elif operation == 'question':
                     studio.answer(SimpleNamespace(**globals()), job_id)
                 elif operation == 'watch_frame':
@@ -964,7 +967,14 @@ def dispatch(operation, args):
             return {'ready': ready, 'queueLength': TASKS.qsize()}
     if operation in {'knowledge_backup', 'knowledge_restore'}:
         import knowledge_archive
-        return knowledge_archive.backup(ROOT) if operation == 'knowledge_backup' else knowledge_archive.restore(ROOT, args['path'])
+        with LOCK:
+            if operation == 'knowledge_backup' and (RUNNER_ACTIVE or PENDING_TASKS):
+                raise ValueError('请先结束录音并暂停或完成后台分析，再导出完整备份')
+            return knowledge_archive.backup(ROOT) if operation == 'knowledge_backup' else knowledge_archive.restore(ROOT, args['path'])
+    if operation == 'restore_records':
+        import knowledge_archive
+        with LOCK:
+            return knowledge_archive.restore_records(SimpleNamespace(**globals()), args['path'], str(args.get('scope','unbound')))
     global _NATIVE
     if operation in {'native_devices', 'native_start', 'native_stop'}:
         if _NATIVE is None:
@@ -985,6 +995,9 @@ def dispatch(operation, args):
                     raise ValueError('资料必须是知识库内已保存的原始文件')
             return public_job(update(identifier, source=replacements.get(job.get('source'), job.get('source')),
                 materials=[{**m, 'path': replacements.get(m['path'], m['path'])} for m in job.get('materials', [])]))
+    if operation in workspace.OPERATIONS:
+        with LOCK:
+            return workspace.dispatch(SimpleNamespace(**globals()), operation, args)
     if operation in studio.OPERATIONS:
         with LOCK:
             return studio.dispatch(SimpleNamespace(**globals()), operation, args)
@@ -1109,7 +1122,15 @@ def dispatch(operation, args):
             if any(task[1] == identifier for task in PENDING_TASKS):
                 return public_job(read_job(identifier))
         job = update(identifier, cancelRequested=False, error=None, state='queued', deferredImport=False)
-        if job['kind'] == 'material':
+        if job.get('nativeRecoveryPending'):
+            from native_capture import recover_saved_segments
+            job=recover_saved_segments(SimpleNamespace(**globals()),identifier)
+        for note in job.get('notes',[]):
+            if note.get('analysisState') in {'queued','error'} and note.get('image'):
+                enqueue('annotation',identifier,note['id'])
+        if job['kind']=='question':
+            enqueue('question',identifier)
+        elif job['kind'] == 'material':
             enqueue('deep', identifier)
         elif job['kind'] == 'file':
             enqueue('file', identifier, 0)
@@ -1122,7 +1143,9 @@ def dispatch(operation, args):
             if job['kind'] == 'watch':
                 watch_service().resume(identifier)
                 update(identifier, state=watch_service().state(identifier))
-        return public_job(job)
+        if job['kind']=='live' and job.get('recordingFinished') and not any(t[1]==identifier for t in PENDING_TASKS):
+            dispatch('finish',{'id':identifier})
+        return public_job(read_job(identifier))
     if operation == 'enhance':
         parent = read_job(identifier)
         if parent['state'] not in {'complete', 'cancelled', 'paused', 'error'}:
@@ -1149,6 +1172,9 @@ def dispatch(operation, args):
 def recover():
     for path in (ROOT / 'jobs').glob('*/job.json'):
         job = json.loads(path.read_text(encoding='utf-8'))
+        if job.get('nativeCapture'):
+            job.update(nativeCapture=False,nativeRecoveryPending=True,captureInterrupted=True)
+            save_job(job)
         if job['state'] in {'running', 'queued', 'recording'}:
             job.update(state='paused', phase='服务重启；原始录音与检查点已保留，点击继续')
             save_job(job)

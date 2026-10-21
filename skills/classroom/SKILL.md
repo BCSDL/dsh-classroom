@@ -26,4 +26,11 @@ Use the `classroom` tool with `operation` and a JSON object string in `args`.
 - Original files, timestamps and raw extracted evidence remain available even when a summary omits a detail. CPU multilingual retrieval does not guarantee every query will find everything. If search is weak, try exact terms, English/Chinese variants, source filenames and paginated reads.
 - The UI exposes optional Windows native microphone recording, Word/PDF export, portable backup/merge, project/all-course scope and explicit cleanup. Capture starts only after the human chooses a device or grants browser sharing. Closing a browser does not stop native capture; exiting DSH does. Never start hidden recording through tools.
 
+## Review workspace and portable backups (0.6)
+
+- The UI adds handwriting/screenshot annotations, five review templates, page/transcript semantic candidates with human confirmation, and multi-select records/notes management. For annotations, only claim text actually returned by image analysis; saved/queued images are not yet understood.
+- Set a preset through `course_options {id,template:"lecture"|"cornell"|"exam"|"problems"|"meeting"}` then `resummarize`. Exam notes do not predict real exam questions. Changing a template invalidates old summary cache reuse.
+- `classroom_knowledge` operation `align` with `{id}` returns slide-page candidates and actual transcript times. Similarity scores are not confidence or proof of exact synchronization. Human-confirmed links are marked explicitly.
+- Backup/restore, bulk removal and microphone/screen capture remain explicit UI actions. Do not bypass confirmation or start hardware capture through shell tools. A version-2 backup verifies files and restores stopped tasks under new IDs, source assets, histories and recycle states into the current project. Old backups cannot restore material they never contained; report any warning.
+
 Give Chinese and English notes when requested. Link claims to transcript times, slide pages, and video timestamps. Speaker labels are anonymous clusters, not verified identities. Video frames are sampled; disclose the sampling interval and do not claim every-frame understanding. Report processing lag and incomplete work explicitly.

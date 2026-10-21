@@ -1,16 +1,55 @@
 {
   "name": "dsh-classroom",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Local classroom recordings: streaming transcripts, speaker labels, translation, summaries, slides and video-frame analysis.",
   "type": "module",
   "main": "lib/index.js",
-  "exports": {".": "./lib/index.js", "./client":"./lib/client.js", "./cordis.patch.yml": "./cordis.patch.yml"},
-  "files": ["lib", "backend/*.py", "backend/*requirements.txt", "web", "chrome-companion", "scripts", "skills", "cordis.patch.yml", "README.md", "THIRD_PARTY.md", "LICENSE"],
-  "keywords": ["dsh-plugin", "deepseek-harness", "transcription", "diarization", "local-ai"],
-  "dependencies": {"marked":"18.1.0","dompurify":"3.4.16","dsh-knowledge-base-local":"1.2.5"},
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "files": [
+    "lib",
+    "backend/*.py",
+    "backend/*requirements.txt",
+    "web",
+    "chrome-companion",
+    "scripts",
+    "skills",
+    "cordis.patch.yml",
+    "README.md",
+    "THIRD_PARTY.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "transcription",
+    "diarization",
+    "local-ai"
+  ],
+  "dependencies": {
+    "marked": "18.1.0",
+    "dompurify": "3.4.16",
+    "dsh-knowledge-base-local": "1.2.5"
+  },
   "license": "MIT",
-  "engines": {"node": ">=22"},
-  "dsh": {"bundle": {"patch": "./cordis.patch.yml"},"client":{"platform":"web","inject":["@deepseek-ai/dsh-client-ui-conversation","@deepseek-ai/dsh-client-ui-session"]}},
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-session"
+      ]
+    }
+  },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/schemastery": "^3.18.4",
@@ -19,5 +58,8 @@
     "@deepseek-ai/dsh-client-connection": "^0.2.0-rc.1",
     "@deepseek-ai/dsh-host-webserver": "^0.2.0-rc.1"
   },
-  "scripts": {"test": "node --test test/*.test.mjs", "pack:check": "npm pack --dry-run --ignore-scripts"}
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "pack:check": "npm pack --dry-run --ignore-scripts"
+  }
 }

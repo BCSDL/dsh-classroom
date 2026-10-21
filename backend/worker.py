@@ -937,6 +937,18 @@ def saved_audio(identifier):
 
 
 def dispatch(operation, args):
+    if operation == 'probe_media':
+        source = Path(args['path']).resolve()
+        if not source.is_file():
+            raise ValueError('原始文件不存在')
+        if source.suffix.lower() in {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tif', '.tiff', '.svg', '.avif', '.heic'}:
+            return {'audio': False, 'video': False}
+        try:
+            info = media_info(str(source))
+        except RuntimeError:
+            return {'audio': False, 'video': False}
+        return {'audio': any(s.get('codec_type') == 'audio' for s in info.get('streams', [])),
+                'video': any(s.get('codec_type') == 'video' and not s.get('disposition', {}).get('attached_pic') for s in info.get('streams', []))}
     if operation in {'chat_begin', 'chat_end'}:
         token = str(args.get('token', ''))[:160]
         if not token:

@@ -2,7 +2,7 @@ import {classroomRPC as rpc,sessionId} from '/api/classroom/session-ui.js';
 
 const element=(tag,text,props={})=>Object.assign(document.createElement(tag),{...(text!==undefined?{textContent:text}:{}),...props});
 const row=(...nodes)=>{const box=element('div',undefined,{className:'row'});box.append(...nodes);return box;};
-const field=(label,tag='input')=>{const input=element(tag,undefined,{ariaLabel:label});if(tag==='input')input.placeholder=label;return input;};
+const field=(label,tag='input')=>element(tag,undefined,{ariaLabel:label,placeholder:label});
 const details=(label,...children)=>{const d=element('details');d.append(element('summary',label),...children);return d;};
 const button=(label,action)=>{const b=element('button',label);b.type='button';b.onclick=async()=>{b.disabled=true;try{await action();}catch(error){status.textContent=error.message;}finally{b.disabled=false;}};return b;};
 let status;
@@ -53,7 +53,7 @@ export function installStudioUI({getSelected=()=>null,openJob=()=>{},updated=()=
  const exports=row(...['docx','pdf'].map(format=>button('导出 '+format.toUpperCase(),async()=>{const params=new URLSearchParams({id:required(),format,...sessionId?{sessionId}:{}});const link=element('a',undefined,{href:'/api/classroom/report?'+params,target:'_blank'});document.body.append(link);link.click();link.remove();})),button('运行依赖自检',async()=>{reading.textContent=JSON.stringify(await rpc('doctor'),null,2);library.open=true;}));
  const nativeDevice=element('select',undefined,{ariaLabel:'本机录音设备'});
  const nativePanel=details('本机持续录音（可关闭网页，DSH 服务需保持运行）',element('p','先列出并选择麦克风，再明确开始录音。Windows 采集进程受退出保护，退出 DSH 时会结束。此模式不自动采集 Chrome 标签页声音。'),row(nativeDevice,button('列出本机麦克风',async()=>{const data=await rpc('native_devices');nativeDevice.replaceChildren(...data.devices.map(name=>element('option',name,{value:name})));status.textContent=data.reason;}),button('开始本机持续录音',async()=>{const job=await rpc('native_start',{device:nativeDevice.value,title:'本机课堂录音',autoTitle:true,options:{language:'en',translate:true,summarize:true,...studioOptions()}});await openJob(job.id);await updated();}),button('结束当前本机录音',async()=>{await rpc('native_stop',{id:required()});await updated();})));
- function studioOptions(){return {terms:terms.value,keywords:keywords.value.split(/[,，\n]/).filter(Boolean),liveChunkSeconds:Number(interval.value),deferAnalysis:true};}
+ function studioOptions(){return {language:document.getElementById('language')?.value||'en',translate:document.getElementById('translate')?.checked??true,summarize:document.getElementById('summarize')?.checked??true,terms:terms.value,keywords:keywords.value.split(/[,，\n]/).filter(Boolean),liveChunkSeconds:Number(interval.value),deferAnalysis:true};}
  host.append(element('h2','课堂工作台与知识库'),status,settings,nativePanel,reviewPanel,notePanel,library,backups,exports);document.querySelector('main').append(host);
  const style=element('style','details{border:1px solid #475569;border-radius:8px;padding:12px;margin:14px 0}summary{cursor:pointer;font-weight:600}textarea{display:block;box-sizing:border-box;width:100%;min-height:85px;margin:10px 0;padding:10px;background:#0f172a;color:#e5e7eb;border:1px solid #475569;border-radius:7px;font:inherit}.review-sentence{padding:10px;border-bottom:1px solid #475569}article{overflow-wrap:anywhere}');document.head.append(style);
  if(location.pathname.endsWith('/library')){library.open=true;document.title='课堂知识库 · DSH';document.querySelector('h1').textContent='课堂知识库';requestAnimationFrame(()=>library.scrollIntoView({block:'start'}));}

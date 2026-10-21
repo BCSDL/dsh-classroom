@@ -16,6 +16,16 @@ class WorkerTests(unittest.TestCase):
         spec.loader.exec_module(self.worker)
     def tearDown(self):
         self.temporary.cleanup()
+    def test_media_probe_uses_streams_instead_of_extension_and_ignores_cover_art(self):
+        source = Path(self.temporary.name) / 'recording.unusual'
+        source.write_bytes(b'fixture')
+        with patch.object(self.worker, 'media_info', return_value={'streams': [
+            {'codec_type': 'audio'}, {'codec_type': 'video', 'disposition': {'attached_pic': 1}}]}):
+            self.assertEqual(self.worker.dispatch('probe_media', {'path': str(source)}), {'audio': True, 'video': False})
+        with patch.object(self.worker, 'media_info', return_value={'streams': [{'codec_type': 'video'}]}):
+            self.assertEqual(self.worker.dispatch('probe_media', {'path': str(source)}), {'audio': False, 'video': True})
+        with patch.object(self.worker, 'media_info', side_effect=RuntimeError('not media')):
+            self.assertEqual(self.worker.dispatch('probe_media', {'path': str(source)}), {'audio': False, 'video': False})
     def test_upload_retry_is_idempotent_and_recoverable(self):
         source = Path(self.temporary.name) / 'test.wav'
         source.write_bytes(b'RIFFfixture')

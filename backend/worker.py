@@ -21,6 +21,7 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).parent))
 import studio
 import workspace
+import durability
 
 _WATCH = None
 _NATIVE = None
@@ -167,6 +168,36 @@ def normalize(path, dest, job_id, start=None, length=None):
     run_process(command, job_id)
 
 
+def context_for_request(prompt, images, max_tokens):
+    """Keep all supplied evidence, without reserving the chat model's maximum KV cache for tiny tasks."""
+    limit = int(CONFIG.get('maxRequestContext', 262144))
+    # UTF-8 bytes are a conservative text-token bound; reserve image and template tokens too.
+    needed = len(prompt.encode('utf-8')) + max_tokens + 8192 * len(images or []) + 2048
+    if needed > limit:
+        raise ValueError('本次证据超出课堂请求上下文上限，请分块分析；原始资料保留')
+    return min(limit, max(8192, 1 << (needed - 1).bit_length()))
+
+
+def wait_for_llm_gpu():
+    required = int(CONFIG.get('minLLMFreeMiB', 10240))
+    deadline = time.monotonic() + 120
+    phase = read_job(CURRENT_JOB).get('phase') if CURRENT_JOB else None
+    while True:
+        models = ollama_models()
+        own = next((m for m in models if same_ollama_model(m.get('name', ''))), {})
+        available = gpu_free() + int(own.get('size_vram', 0) / (1024 * 1024))
+        if available >= required:
+            if CURRENT_JOB and phase:
+                update(CURRENT_JOB, phase=phase)
+            return
+        if CURRENT_JOB:
+            cancelled(CURRENT_JOB)
+            update(CURRENT_JOB, phase=f'等待显存：当前模型可用预算 {available} MiB，需要至少 {required} MiB；录音片段继续保存')
+        if time.monotonic() >= deadline:
+            raise RuntimeError('其他程序占用显存，尚未运行本次模型分析。请退出占显存应用后继续；原始资料保留，未切换到 CPU 模型')
+        time.sleep(2)
+
+
 def ollama(prompt, images=None, output_format=None, max_tokens=1400):
     global OLLAMA_LEASE
     # Retain the small streaming ASR model only while Gemma is already resident
@@ -178,21 +209,35 @@ def ollama(prompt, images=None, output_format=None, max_tokens=1400):
         resident = False
     if images or not resident or gpu_free() < 1800:
         release_asr_models()
+    wait_for_llm_gpu()
     message = {'role': 'user', 'content': prompt}
     if images:
         message['images'] = [base64.b64encode(Path(p).read_bytes()).decode() for p in images]
     body = {'model': MODEL, 'messages': [message], 'stream': False, 'think': False,
             'keep_alive': '5m', 'options': {'temperature': 0.15, 'num_predict': max_tokens}}
+    if CONFIG.get('adaptiveRequestContext', True):
+        body['options']['num_ctx'] = context_for_request(prompt, images, max_tokens)
     if output_format:
         body['format'] = output_format
     request = urllib.request.Request(OLLAMA + '/api/chat', json.dumps(body).encode(), {'Content-Type': 'application/json'})
-    with urllib.request.urlopen(request, timeout=240) as response:
-        value = json.load(response)
+    try:
+        with urllib.request.urlopen(request, timeout=240) as response:
+            value = json.load(response)
+    except __import__('urllib.error', fromlist=['HTTPError']).HTTPError as error:
+        try:
+            detail = json.loads(error.read()).get('error', str(error))
+        except Exception:
+            detail = str(error)
+        raise RuntimeError('本地模型服务返回错误：' + str(detail)[:2000]) from error
     # Remember this request's lease. Cleanup must not unload a lease refreshed
     # by a later DSH chat or another client sharing the same Ollama server.
     try:
-        OLLAMA_LEASE = next((m.get('expires_at') for m in ollama_models()
-                             if same_ollama_model(m.get('name', ''))), None)
+        own = next((m for m in ollama_models() if same_ollama_model(m.get('name', ''))), {})
+        OLLAMA_LEASE = own.get('expires_at')
+        if own.get('size', 0) and own.get('size_vram', 0) + 16 * 1024**2 < own['size']:
+            raise RuntimeError('模型权重未全部驻留 GPU；请释放显存后继续，本次结果未作为成功分析保存')
+    except RuntimeError:
+        raise
     except Exception:
         OLLAMA_LEASE = None
     result = value.get('message', {}).get('content', '').strip()
@@ -975,6 +1020,22 @@ def dispatch(operation, args):
         import knowledge_archive
         with LOCK:
             return knowledge_archive.restore_records(SimpleNamespace(**globals()), args['path'], str(args.get('scope','unbound')))
+    if operation == 'rebase_knowledge_references':
+        with LOCK:
+            for identifier in args.get('ids', []):
+                job = read_job(identifier)
+                if not job.get('restoredFrom'):
+                    raise ValueError('只能重定位恢复记录的知识引用')
+                changed = {}
+                for field in ['citations', 'answerEvidence']:
+                    if field in job:
+                        entries = [{**item, 'id': args['idMap'].get(item.get('id'), item.get('id')),
+                                    'source': {**item.get('source', {}), 'projectDirectory': args.get('projectDirectory'), 'sessionId': args.get('sessionId')}} for item in job[field]]
+                        if entries != job[field]:
+                            changed[field] = entries
+                if changed:
+                    update(identifier, **changed)
+            return {'updated': True}
     global _NATIVE
     if operation in {'native_devices', 'native_start', 'native_stop'}:
         if _NATIVE is None:
@@ -1014,7 +1075,7 @@ def dispatch(operation, args):
     if operation == 'list':
         with LOCK:
             return [public_job(job) for p in sorted((ROOT / 'jobs').glob('*/job.json'), key=lambda p: p.stat().st_mtime, reverse=True)
-                    if not (job := json.loads(p.read_text(encoding='utf-8'))).get('deleted')]
+                    if re.fullmatch(r'[a-f0-9]{32}',p.parent.name) and not (job := json.loads(p.read_text(encoding='utf-8'))).get('deleted')]
     if operation in {'start_file', 'create_live'}:
         return public_job(new_job('file' if operation == 'start_file' else 'live', args))
     if operation == 'document':
@@ -1085,7 +1146,7 @@ def dispatch(operation, args):
         return job
     if operation == 'append':
         index = int(args['index'])
-        if index < 0:
+        if index < 0 or index >= 10**12:
             raise ValueError('Invalid chunk index')
         path = Path(args['path']).resolve()
         if not path.is_file():
@@ -1097,10 +1158,7 @@ def dispatch(operation, args):
             if job.get('recordingFinished'):
                 raise ValueError('录音已经结束；不能添加新的片段')
             # Copy before acknowledging: each recording chunk remains recoverable.
-            target = job_dir(identifier) / 'inputs' / f'live-{index:08d}{path.suffix}'
-            shutil.copyfile(path, target)
-            job['chunks'][str(index)] = {'path': str(target), 'offset': max(0, float(args['offset']))}
-            save_job(job)
+            durability.accept(SimpleNamespace(**globals()), job, index, path, float(args['offset']))
         enqueue('live', identifier, index)
         return {'accepted': True, 'duplicate': False}
     if operation == 'finish':
@@ -1171,6 +1229,9 @@ def dispatch(operation, args):
 
 def recover():
     for path in (ROOT / 'jobs').glob('*/job.json'):
+        if not re.fullmatch(r'[a-f0-9]{32}', path.parent.name):
+            continue
+        durability.recover(SimpleNamespace(**globals()), path.parent.name)
         job = json.loads(path.read_text(encoding='utf-8'))
         if job.get('nativeCapture'):
             job.update(nativeCapture=False,nativeRecoveryPending=True,captureInterrupted=True)

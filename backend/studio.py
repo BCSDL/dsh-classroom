@@ -150,6 +150,10 @@ def dispatch(w, operation, args):
                 raise ValueError('修订内容无效')
             w.atomic_json(w.job_dir(identifier) / 'results' / name, item)
         w.update(identifier, notes=saved['job'].get('notes', []), **({} if saved.get('scope')=='notes' else {'speakerNames':saved['job'].get('speakerNames', {})}))
+        if saved.get('scope') == 'notes':
+            w.update(identifier, revision=job.get('revision', 0) + 1, summaryStale=True)
+            w.export_job(identifier)
+            return w.public_job(w.read_job(identifier))
     elif operation == 'speaker_name':
         name = str(args.get('name', '')).strip()[:80]
         key = str(args.get('speaker', ''))[:80]
@@ -335,7 +339,7 @@ def export_document(w, identifier, format):
     source = (w.job_dir(identifier) / 'report.md').read_text(encoding='utf-8')
     from markdown_it import MarkdownIt
     parser = MarkdownIt('commonmark', {'html': False}).enable('table').disable('image')
-    target = directory / ('classroom.' + format)
+    target = directory / ('classroom-' + uuid.uuid4().hex + '.' + format)
     if format == 'docx':
         from docx import Document
         from docx.shared import Pt
@@ -411,5 +415,5 @@ def export_document(w, identifier, format):
                 page=pdf.new_page(width=595,height=842)
                 page.insert_text((36,36),'Annotation / '+str(note.get('time',0))+'s')
                 page.insert_image(fitz.Rect(36,55,559,806),filename=str(safe_annotation(w,identifier,note['image'])))
-            temporary=target.with_suffix('.annotated.pdf');pdf.save(temporary);pdf.close();temporary.replace(target)
+            temporary=target.with_suffix('.annotated.pdf');pdf.save(temporary);pdf.close();target=temporary
     return {'path': str(target), 'format': format, 'bytes': target.stat().st_size}

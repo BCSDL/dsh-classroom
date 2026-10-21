@@ -13,7 +13,8 @@ A local-first DeepSeek Harness plugin for English/Chinese classes. Import record
 - **同步复习**：CPU 多语言语义匹配课件页与转写时间段，展示页图、原文和可回听候选；可以手动校准起止时间并确认，确认结果持久保存。语义分数不是准确率，当前不承诺自动精确同步、跨播放器完整兼容或短暂画面不遗漏。
 - **多选整理**：项目内按标题筛选课堂记录/独立知识笔记，分页、多选、批量移入回收区/恢复，导出所选记录 ZIP 或合并笔记 Markdown。原件保留，永久删除仍需单条明确确认。
 - **运行与安装**：增加 Windows `scripts/setup-windows.bat`，可检查/引导安装 Node、uv、FFmpeg、Ollama，准备隔离 Python/语音/检索模型，并安装指定公开固定提交。已有组件不会强制升级，不改 Codex CLI、启动器或模型上下文。首次 DSH/Ollama 模型连接仍使用官方设置；新电脑还需有足够显存、磁盘、下载权限及驱动。WinGet 组件可需要系统安装权限。
-- **故障恢复**：原生录音异常退出后清理失效的运行标志；点击继续时尝试恢复尚未确认的本地音频片段。无法解码的末尾数据会记录警告，不能恢复从未录到的声音。批注识别失败可随记录继续处理。Windows PowerShell 5.1 的中文脚本编码已修正。
+- **课堂请求显存保护**：主聊天的模型和 262K 上下文配置保持；课堂分块请求按实际证据长度、图片和输出预算申请上下文，保留全部已提供的证据。`adaptiveRequestContext` 可关闭，`maxRequestContext` 默认仍为 262144。推理前检查配置模型和剩余显存预算（默认至少 10240 MiB，`minLLMFreeMiB` 可设置），不足时等待并给出可恢复提示，保留采集数据；不会关闭游戏或其他应用。结果交付前检查模型权重是否驻留 GPU。该保护无法预测其他应用在推理途中突然增加占用。
+- **故障恢复**：原生录音异常退出后清理失效的运行标志；点击继续时尝试恢复尚未确认的本地音频片段。片段复制和元数据提交之间的进程中断也能从校验收据恢复；无法解码的末尾数据会记录警告，不能恢复从未录到的声音。批注识别失败可随记录继续处理。Windows PowerShell 5.1 的中文脚本编码已修正。
 
 安装来源说明：[Microsoft WinGet](https://learn.microsoft.com/en-us/windows/package-manager/winget/install)、[uv 官方安装](https://docs.astral.sh/uv/getting-started/installation/)、[FFmpeg 下载](https://ffmpeg.org/download.html)、[Ollama Windows](https://ollama.com/download/windows)。本版本没有增加常驻 GPU 模型。
 

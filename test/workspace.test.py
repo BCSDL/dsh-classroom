@@ -17,6 +17,27 @@ class WorkspaceTests(unittest.TestCase):
         self.w=importlib.util.module_from_spec(spec);spec.loader.exec_module(self.w)
         job=self.w.dispatch('create_live',{'title':'Physics','options':{'translate':False,'summarize':False}});self.id=job['id'];self.w.update(self.id,state='complete')
     def tearDown(self):self.tmp.cleanup()
+    def test_request_context_keeps_full_evidence_and_does_not_change_global_model_settings(self):
+        self.assertEqual(self.w.context_for_request('short',[],20),8192)
+        context=self.w.context_for_request('课件'*5000,['page.png'],1600)
+        self.assertGreaterEqual(context,len(('课件'*5000).encode('utf-8'))+8192+1600+2048)
+        self.assertLessEqual(context,262144)
+        with self.assertRaisesRegex(ValueError,'上下文'):self.w.context_for_request('x'*262144,[],20)
+    def test_llm_waits_instead_of_competing_with_a_large_gpu_application(self):
+        with patch.object(self.w,'gpu_free',return_value=100),patch.object(self.w,'ollama_models',return_value=[]),patch.object(self.w.time,'monotonic',side_effect=[0,121]):
+            with self.assertRaisesRegex(RuntimeError,'其他程序占用显存'):self.w.wait_for_llm_gpu()
+        with patch.object(self.w,'gpu_free',return_value=2048),patch.object(self.w,'ollama_models',return_value=[{'name':self.w.MODEL,'size_vram':8192*1024**2}]):
+            self.w.wait_for_llm_gpu()
+    def test_audio_recovers_when_process_stops_between_file_and_metadata_commit(self):
+        source=self.root/'piece.wav';source.write_bytes(b'recoverable-audio')
+        self.w.update(self.id,state='recording')
+        with patch.object(self.w,'save_job',side_effect=OSError('simulated crash')):
+            with self.assertRaises(OSError):self.w.dispatch('append',{'id':self.id,'index':0,'offset':7.25,'path':str(source)})
+        self.assertEqual(self.w.read_job(self.id)['chunks'],{})
+        self.w.recover();saved=self.w.read_job(self.id)
+        self.assertEqual(saved['chunks']['0']['offset'],7.25)
+        self.assertEqual(Path(saved['chunks']['0']['path']).read_bytes(),b'recoverable-audio')
+        self.assertEqual(self.w.TASKS.qsize(),0)
     def test_template_changes_cache_and_retains_existing_terms(self):
         self.w.dispatch('course_options',{'id':self.id,'terms':'eigenvalue','keywords':['energy']})
         self.w.dispatch('note_save',{'id':self.id,'text':'Kinetic energy is one half m v squared.'})

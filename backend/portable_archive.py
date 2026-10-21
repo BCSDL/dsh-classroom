@@ -202,6 +202,8 @@ def restore_records(w, staging, scope='unbound'):
         temporary = w.ROOT / 'jobs' / (identifier + '.restore-part')
         shutil.copytree(source, temporary)
         try:
+            for name in ['inputs', 'audio', 'results']:
+                (temporary / name).mkdir(exist_ok=True)
             for p in temporary.rglob('*'):
                 if p.suffix == '.json':
                     p.write_text(json.dumps(rebase(json.loads(p.read_text(encoding='utf-8'))), ensure_ascii=False), encoding='utf-8')
@@ -222,7 +224,9 @@ def restore_records(w, staging, scope='unbound'):
             job_path = temporary / 'job.json'
             job = json.loads(job_path.read_text(encoding='utf-8'))
             job.update(id=identifier, deleted=False, nativeCapture=False, titlePending=False,
-                       titleAttempted=True, restoredFrom=entry['id'], cancelRequested=False)
+                       titleAttempted=True, restoredFrom=entry['id'], cancelRequested=False, deferredImport=False)
+            if job.get('kind') in {'live', 'watch'}:
+                job['recordingFinished'] = True
             job['materials'] = [m for m in job.get('materials', []) if m.get('path') and Path(m['path']).is_relative_to(w.ROOT)]
             if job.get('state') not in {'complete', 'paused', 'cancelled', 'error'}:
                 job.update(state='paused', phase='从备份恢复，等待人工继续')

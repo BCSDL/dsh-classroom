@@ -62,6 +62,9 @@ class PortableTests(unittest.TestCase):
         result=self.w.dispatch('restore_records',{'path':staged['path'],'scope':'another-project'})
         new=result['mapping'][self.id];self.assertNotEqual(new,self.id)
         job=self.w.read_job(new);self.assertTrue(Path(job['notes'][0]['image']).is_file())
+        self.assertFalse(job['deferredImport'])
+        self.assertTrue(job['recordingFinished'])
+        self.assertTrue((self.w.job_dir(new)/'results').is_dir())
         with closing(sqlite3.connect(self.w.job_dir(new)/'capture.sqlite')) as restored:
             self.assertEqual(restored.execute('SELECT path FROM frames').fetchone()[0],job['notes'][0]['image'])
         again=self.w.dispatch('restore_records',{'path':staged['path'],'scope':'another-project'})

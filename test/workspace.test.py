@@ -73,6 +73,13 @@ class WorkspaceTests(unittest.TestCase):
         with self.assertRaises(ValueError):self.w.dispatch('alignment_confirm',{'id':self.id,'source':'invented.pdf','page':1,'start':5,'end':7})
         job=self.w.dispatch('alignment_confirm',{'id':self.id,'source':'lesson.pdf','page':1,'start':5,'end':7})
         self.assertTrue(job['alignments'][0]['verified']);self.assertEqual(job['alignments'][0]['method'],'human-confirmed')
+    def test_restored_legacy_page_can_confirm_original_name_despite_hashed_input(self):
+        source=self.root/('a'*64+'.pdf');source.write_bytes(b'fixture')
+        self.w.update(self.id,materials=[{'kind':'document','path':str(source)}])
+        (self.w.job_dir(self.id)/'materials.jsonl').write_text(json.dumps({'key':'0-0','source':{'source':'slides.pdf','page':1}})+'\n',encoding='utf-8')
+        job=self.w.dispatch('alignment_confirm',{'id':self.id,'source':'slides.pdf','page':1,'start':3,'end':5})
+        self.assertEqual(job['alignments'][0]['source'],'slides.pdf')
+        with self.assertRaises(ValueError):self.w.dispatch('alignment_confirm',{'id':self.id,'source':'slides.pdf','page':2,'start':3,'end':5})
     def test_interrupted_native_capture_recovers_closed_unacknowledged_audio_on_explicit_resume(self):
         source=self.w.job_dir(self.id)/'inputs'/'native-00000000.wav'
         with wave.open(str(source),'wb')as audio:audio.setnchannels(1);audio.setsampwidth(2);audio.setframerate(16000);audio.writeframes(b'\0\0'*1600)

@@ -57,8 +57,22 @@ def dispatch(w, operation, args):
         start, end = float(args['start']), float(args.get('end', args['start']))
         page, source = int(args['page']), str(args['source'])
         sources = {Path(m['path']).name for m in job.get('materials', [])}
+        sources.update(m['name'] for m in job.get('materials', []) if m.get('name'))
         if job.get('source'):
             sources.add(Path(job['source']).name)
+        # Older jobs retained original names in page evidence while their input
+        # paths were already content-addressed. Match that persisted page too.
+        evidence = w.job_dir(identifier) / 'materials.jsonl'
+        if evidence.exists():
+            for line in evidence.read_text(encoding='utf-8').splitlines():
+                if not line.strip():
+                    continue
+                item = json.loads(line)
+                saved = item.get('source', {})
+                index = str(item.get('key', '')).split('-', 1)[0]
+                if (index.isdigit() and int(index) < len(job.get('materials', []))
+                        and saved.get('page') == page and saved.get('source') == source):
+                    sources.add(source)
         if source not in sources or not 1 <= page <= 100000 or not math.isfinite(start + end) or start < 0 or end < start:
             raise ValueError('需要真实课件页和有效录音时间')
         key = source + ':' + str(page)

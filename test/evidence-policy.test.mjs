@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {dateWindow,photoRequest} from '../lib/photo-tools.js';
+import {dateWindow,photoRequest,registerPhotoTools} from '../lib/photo-tools.js';
 import {sanitizeMemory,observeEvidence,semanticProblem} from '../lib/evidence-policy.js';
 
 test('month windows clamp calendar days and distinguish previous month from trailing month',()=>{
@@ -45,4 +45,9 @@ test('runtime memory section metadata stays consistent with filtered content',()
 test('individual attached image evaluation needs pixels but no directory catalog',()=>{
  assert.match(semanticProblem({needsVisual:true,needsPhotos:false},'无法判断图片好看吗'),/实际图片/);
  assert.equal(semanticProblem({needsVisual:true,needsPhotos:false,visualImages:1},'这张图的主体清晰。'),'');
+});
+test('photo tool compiles against the real DSH tool schema DSL',()=>{
+ let registered;
+ registerPhotoTools({effect:f=>f(),tools:{register:d=>{registered=d;return ()=>{};}}},{});
+ assert.equal(registered.name,'photo_catalog');
 });

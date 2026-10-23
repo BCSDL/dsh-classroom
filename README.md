@@ -1,3 +1,5 @@
+> Windows installer fix 0.7.2: PowerShell scripts include an explicit UTF-8 BOM for Windows PowerShell 5.1 and PowerShell 7. Plugin runtime behavior is unchanged.
+
 # dsh-classroom 0.7.1：功能解耦维护版
 
 通用 read_document、工具约束/记忆时效检查和 photo_catalog 已移到独立插件，课堂插件不再注册这些工具或通用技能。原 0.7.0 是未进入正式环境的捆绑候选，不建议安装。课堂内的课件解析保留为内部能力，公共代码有 SHARED-SOURCES.json 来源和哈希。

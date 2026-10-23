@@ -58,3 +58,11 @@ test('failed calls receive current tool schema without changing their error outc
  const help=h.calls.length;const schema=await h.ctx.tools.execute({agent:h.agent,name:'tool_help',arguments:{name:'tool_context'},signal:signal()});
  assert.equal(schema.isError,false);assert.ok(schema.content[0].text.includes('parameters'));assert.equal(h.calls.length,help+1);
 });
+test('time/photo requests do not inject irrelevant classroom searches and transient memory writes need provenance',async()=>{
+ const h=harness();h.ctx.tools.register({name:'classroom_knowledge',parameters:{},async execute(){return '{}';},output:{render:()=>[{type:'text',text:'{}'}]}});applyToolDiscipline(h.ctx,{maxEvidenceRetries:2});
+ const messages=[user([{type:'text',text:'现在几点？'}])];await h.handlers['agent/pre-step']({agent:h.agent,messages,turn:1,signal:signal()},async()=>({kind:'enter',messages}));
+ assert.ok(!h.calls.some(x=>x.name==='classroom_knowledge'));
+ const denied=await h.handlers['tools/pre-execute']({name:'memory_add',arguments:{content:'read_document fails with a sandbox error'}},async()=>({kind:'allow'}));assert.equal(denied.kind,'deny');
+ const allowed=await h.handlers['tools/pre-execute']({name:'memory_add',arguments:{content:'User prefers Chinese'}},async()=>({kind:'allow'}));assert.equal(allowed.kind,'allow');
+ const upstream=await h.handlers['tools/pre-execute']({name:'memory_add',arguments:{}},async()=>({kind:'deny',reason:'upstream restriction'}));assert.equal(upstream.reason,'upstream restriction');
+});

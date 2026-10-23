@@ -985,6 +985,9 @@ def saved_audio(identifier):
 
 
 def dispatch(operation, args):
+    if operation == 'photo_evidence':
+        import photo_evidence
+        return photo_evidence.dispatch(ROOT, args['action'], args)
     if operation == 'probe_media':
         source = Path(args['path']).resolve()
         if not source.is_file():

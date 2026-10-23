@@ -4,6 +4,16 @@ A local-first DeepSeek Harness plugin for English/Chinese classes. Import record
 
 **Pre-release:** this plugin provides a pipeline, not a guarantee of commercial-service accuracy or latency. Test with your classroom microphone and recordings before relying on the notes. Human review remains necessary for ambiguous speech, equations, names, accents and overlapping speakers.
 
+## 0.7.0：目录完整性、日期与实际看图证据
+
+- 新增 `photo_catalog`：完整枚举图片目录，不再受其他目录工具的 500 项预览限制。`recent_month` 为本地日期回溯一个日历月，`previous_month` 为上个自然月。默认依据截图文件名日期，无法识别的日期单独计数，不冒充 EXIF 拍摄日期。
+- `scan → sheet → review → inspect → result`：12 张缩略图一页，最终候选读取较大预览；评分必须对应已交付的真实图片，输出主观理由、覆盖数和原文件。未全看只能说已审阅候选中的推荐。源图片不移动/删除；清单、评语与报告保存在课堂数据目录 `photo-evidence/`，按项目隔离。图片改变则旧看图记录失效。
+- 自动时间检查增加时区与本地日期。指定 Windows 图片目录的请求自动获取完整清单/日期窗口；截断工具结果、错误当前年份、未看图评分及不完整覆盖的全局断言会触发有限次数的纠正。先前已流出的草稿不能抹除，不能承诺模型永远遵循纠正。
+- 注入记忆时过滤相对月份、旧目录否定与旧工具故障等易过时断言，保留偏好和原始记忆，原记忆文件不删除。无日期的临时故障/相对时间断言不能通过手动 memory_add/update 写成长期事实。第三方记忆插件自己的自动总结没有被重写；过滤与当前工具证据用于减少错误继续传播。
+- 普通时间/照片任务不再无条件触发课堂知识检索，减少无关上下文；课堂资料与明确要求召回时仍检索。
+
+这是工具和证据流程补强，不会扩大 Gemma 本身的推理能力。大图库实际审阅仍需要分页，缩略图初筛也可能漏掉小细节。
+
 ## 0.6.1：Windows 恢复目录占用修复
 
 真实 GPU 流程生成含图片 PDF 后，Windows 可能短暂占用刚复制的恢复目录。发布目录改为有限重试；持续占用会给出明确错误，原始备份和已经恢复的记录保留，不修改系统权限或关闭安全软件。

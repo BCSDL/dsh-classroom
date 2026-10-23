@@ -1,9 +1,0 @@
-node_modules/
-.venv/
-__pycache__/
-*.pyc
-*.tgz
-data/
-models/
-.env
-*.log

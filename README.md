@@ -1,3 +1,9 @@
+# dsh-classroom 0.7.1：功能解耦维护版
+
+通用 read_document、工具约束/记忆时效检查和 photo_catalog 已移到独立插件，课堂插件不再注册这些工具或通用技能。原 0.7.0 是未进入正式环境的捆绑候选，不建议安装。课堂内的课件解析保留为内部能力，公共代码有 SHARED-SOURCES.json 来源和哈希。
+
+下方是历史课堂能力说明；涉及通用工具的旧说明需安装对应独立插件，不能当作课堂自带能力。
+
 # DSH Classroom / 课堂纪要
 
 A local-first DeepSeek Harness plugin for English/Chinese classes. Import recordings, capture microphone audio, produce timestamped transcripts, anonymous speaker labels, bilingual translation and rolling summaries. Create a separate enhanced edition from the saved recording plus slides and video frames.

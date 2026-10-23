@@ -1,0 +1,14 @@
+{
+  "lib/shared/attachments.js": {
+    "source": "shared/attachments.js",
+    "sha256": "3049290e1be801b51f2e3f97e7b3a4daaf643c35122e08dfda33b867142254c8"
+  },
+  "backend/document_reader.py": {
+    "source": "shared/document_reader.py",
+    "sha256": "2c7c5f23a30f8371805f1d796c64bcaf054ed308e4936946938a1977763e863c"
+  },
+  "backend/engineering.py": {
+    "source": "shared/engineering.py",
+    "sha256": "cf8644c22b70181df9aac0d2e2c4b14145dd589755e3ab9e7e514bb9d9de0fc0"
+  }
+}

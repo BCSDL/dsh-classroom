@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {dateWindow,photoRequest,registerPhotoTools} from '../lib/photo-tools.js';
-import {sanitizeMemory,observeEvidence,semanticProblem} from '../lib/evidence-policy.js';
+import {sanitizeMemory,observeEvidence,semanticProblem,repeatedPhotoCall} from '../lib/evidence-policy.js';
 
 test('month windows clamp calendar days and distinguish previous month from trailing month',()=>{
  assert.equal(dateWindow('recent_month',new Date('2026-03-31T12:00:00Z')).start,'2026-02-28');
@@ -50,4 +50,10 @@ test('photo tool compiles against the real DSH tool schema DSL',()=>{
  let registered;
  registerPhotoTools({effect:f=>f(),tools:{register:d=>{registered=d;return ()=>{};}}},{});
  assert.equal(registered.name,'photo_catalog');
+});
+test('repeated photo calls are bounded without blocking distinct pages or first retry',()=>{
+ const state={},args={operation:'list',catalog:'id',offset:0},result={content:[{type:'text',text:'{}'}]};
+ observeEvidence(state,{name:'photo_catalog',arguments:args},result);assert.equal(repeatedPhotoCall(state,args),'');
+ observeEvidence(state,{name:'photo_catalog',arguments:args},result);assert.match(repeatedPhotoCall(state,{offset:0,catalog:'id',operation:'list'}),/停止/);
+ assert.equal(repeatedPhotoCall(state,{...args,offset:12}),'');
 });

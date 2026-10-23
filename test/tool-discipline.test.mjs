@@ -66,3 +66,8 @@ test('time/photo requests do not inject irrelevant classroom searches and transi
  const allowed=await h.handlers['tools/pre-execute']({name:'memory_add',arguments:{content:'User prefers Chinese'}},async()=>({kind:'allow'}));assert.equal(allowed.kind,'allow');
  const upstream=await h.handlers['tools/pre-execute']({name:'memory_add',arguments:{}},async()=>({kind:'deny',reason:'upstream restriction'}));assert.equal(upstream.reason,'upstream restriction');
 });
+test('directory photo selection automatically supplies real thumbnail content after a full scan',async()=>{
+ const h=harness();h.ctx.tools.register({name:'photo_catalog',parameters:{},async execute(args){return JSON.stringify(args.operation==='scan'?{id:'a'.repeat(32),complete:true,selectedCount:12}: {imagesReturned:1,items:[{id:'image'}]});},output:{render:(_args,text)=>[{type:'text',text},{type:'image',attachment:{attachmentId:'fixture-image'}}]}});applyToolDiscipline(h.ctx,{maxEvidenceRetries:2});
+ const messages=[user([{type:'text',text:'在 "D:\\fixture-nonexistent\\Photos" 中挑选最近1个月的最佳照片'}])];const result=await h.handlers['agent/pre-step']({agent:h.agent,messages,turn:1,signal:signal()},async()=>({kind:'enter',messages}));
+ assert.deepEqual(h.calls.map(x=>x.arguments.operation).filter(Boolean),['scan','sheet']);assert.ok(result.messages.some(x=>x.content.some(p=>p.type==='image')));
+});

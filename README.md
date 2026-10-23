@@ -2,7 +2,7 @@
 
 通用 read_document、工具约束/记忆时效检查和 photo_catalog 已移到独立插件，课堂插件不再注册这些工具或通用技能。原 0.7.0 是未进入正式环境的捆绑候选，不建议安装。课堂内的课件解析保留为内部能力，公共代码有 SHARED-SOURCES.json 来源和哈希。
 
-下方是历史课堂能力说明；涉及通用工具的旧说明需安装对应独立插件，不能当作课堂自带能力。
+下方说明课堂功能及独立工具的迁移边界。
 
 # DSH Classroom / 课堂纪要
 
@@ -10,15 +10,13 @@ A local-first DeepSeek Harness plugin for English/Chinese classes. Import record
 
 **Pre-release:** this plugin provides a pipeline, not a guarantee of commercial-service accuracy or latency. Test with your classroom microphone and recordings before relying on the notes. Human review remains necessary for ambiguous speech, equations, names, accents and overlapping speakers.
 
-## 0.7.0：目录完整性、日期与实际看图证据
+## 通用功能已迁出课堂插件
 
-- 新增 `photo_catalog`：完整枚举图片目录，不再受其他目录工具的 500 项预览限制。`recent_month` 为本地日期回溯一个日历月，`previous_month` 为上个自然月。默认依据截图文件名日期，无法识别的日期单独计数，不冒充 EXIF 拍摄日期。
-- `scan → sheet → review → inspect → result`：12 张缩略图一页，最终候选读取较大预览；评分必须对应已交付的真实图片，输出主观理由、覆盖数和原文件。未全看只能说已审阅候选中的推荐。源图片不移动/删除；清单、评语与报告保存在课堂数据目录 `photo-evidence/`，按项目隔离。图片改变则旧看图记录失效。
-- 自动时间检查增加时区与本地日期。指定 Windows 图片目录的请求自动获取完整清单/日期窗口；截断工具结果、错误当前年份、未看图评分及不完整覆盖的全局断言会触发有限次数的纠正。先前已流出的草稿不能抹除，不能承诺模型永远遵循纠正。
-- 注入记忆时过滤相对月份、旧目录否定与旧工具故障等易过时断言，保留偏好和原始记忆，原记忆文件不删除。无日期的临时故障/相对时间断言不能通过手动 memory_add/update 写成长期事实。第三方记忆插件自己的自动总结没有被重写；过滤与当前工具证据用于减少错误继续传播。
-- 普通时间/照片任务不再无条件触发课堂知识检索，减少无关上下文；课堂资料与明确要求召回时仍检索。
+- [dsh-tool-guard](https://github.com/BCSDL/dsh-tool-guard)：工具参数指导、tool_context/tool_help、证据检查、日期和旧记忆处理。
+- [dsh-document-tools](https://github.com/BCSDL/dsh-document-tools)：原生附件与本地文档 read_document。
+- [dsh-photo-tools](https://github.com/BCSDL/dsh-photo-tools)：图片清单、预览、评分和审阅覆盖。
 
-这是工具和证据流程补强，不会扩大 Gemma 本身的推理能力。大图库实际审阅仍需要分页，缩略图初筛也可能漏掉小细节。
+三者分别安装/启停/卸载，不需要课堂插件。课堂内部解析课件复用 CPU 解析源码，但不再注册通用读取工具。普通图片/代码/PDF任务不会仅因启用课堂插件就自动进入课堂知识库；课程相关请求或已有课堂记录绑定的会话才自动归档资料，明确拒绝导入时遵从拒绝。
 
 ## 0.6.1：Windows 恢复目录占用修复
 
@@ -109,18 +107,7 @@ The DSH model can read an existing capture through the typed `watch_playback`
 tool. A successful start is not a completed analysis. Long sessions and the
 actual school's Panopto instance need practical validation.
 
-Version 0.1.8 adds a typed DSH `read_document` tool, native-upload receipt resolution,
-PDF page images, paginated reads and a tool-discipline hook. Every new user input
-executes a local `tool_context` probe before inference and automatically reads the
-first three native attachments (three units each). Remaining units/files require
-explicit reads. Failed/partial reads are marked. The Stop hook requests at most
-two corrections for missing web evidence or missing file readback. Streaming
-drafts are not hidden; this is evidence guidance and bounded runtime correction,
-not a guarantee that a small model cannot hallucinate. Set `toolDiscipline: false`
-in the classroom profile row to disable the hooks while keeping the file reader.
-This hook applies only to DSH; the separate CLI configuration is unchanged.
-`tool_help` returns a live tool schema; failed calls receive the real schema or
-an unknown-name correction. Schema lookup is not counted as task/source evidence.
+The former generic reader and tool-discipline hooks now belong to independent document-tools and tool-guard plugins. Enable those packages separately; classroom has no toolDiscipline/maxEvidenceRetries setting and does not register read_document, tool_context, tool_help, photo_catalog, local-tools or review-agent. Disabling classroom therefore does not disable ordinary file or image tools.
 
 Use the official native attachment button. The third-party `dsh-file-upload`
 0.5.4 has a conflicting `read_document` tool and was observed failing with

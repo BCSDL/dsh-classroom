@@ -57,3 +57,9 @@ test('repeated photo calls are bounded without blocking distinct pages or first 
  observeEvidence(state,{name:'photo_catalog',arguments:args},result);assert.match(repeatedPhotoCall(state,{offset:0,catalog:'id',operation:'list'}),/停止/);
  assert.equal(repeatedPhotoCall(state,{...args,offset:12}),'');
 });
+test('a followup correction cannot deny a year present in the actual full inventory',()=>{
+ const state={photo:{complete:true,selectedCount:131,byYear:{2024:285,2025:1800,2026:1265}},needsPhotos:false};
+ assert.match(semanticProblem(state,'实际情况：完全没有2026年的照片。'),/存在/);
+ assert.equal(semanticProblem(state,'此前“没有2026年的照片”的说法错误，实际有2026年的图片。'),'');
+ assert.equal(semanticProblem(state,'没有2023年的照片。'),'');
+});

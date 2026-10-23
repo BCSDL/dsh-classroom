@@ -30,7 +30,7 @@ def load(root, identifier):
 
 def public(catalog):
     return {key: catalog[key] for key in ['id', 'root', 'createdAt', 'dateBasis', 'window', 'totalImages',
-        'selectedCount', 'undatedCount', 'complete', 'errors', 'earliestName', 'latestName']}
+        'selectedCount', 'undatedCount', 'byYear', 'complete', 'errors', 'earliestName', 'latestName']}
 
 
 def checked_image(catalog, item):
@@ -91,6 +91,7 @@ def dispatch(root, operation, args):
         catalog = {'id': identifier, 'root': str(source), 'scope': args.get('scope'), 'createdAt': args['now'],
             'dateBasis': args.get('dateBasis', 'filename'), 'window': window, 'totalImages': len(rows),
             'selectedCount': sum(x['selected'] for x in rows), 'undatedCount': sum(x['date'] is None for x in rows),
+            'byYear': {year: sum(bool(x['date'] and x['date'].startswith(year)) for x in rows) for year in sorted({x['date'][:4] for x in rows if x['date']})},
             'complete': not errors, 'errors': errors, 'earliestName': rows[-1]['name'] if rows else None,
             'latestName': rows[0]['name'] if rows else None, 'rows': rows, 'delivered': {}, 'reviews': {}}
         write_json(directory / 'catalog.json', catalog)
